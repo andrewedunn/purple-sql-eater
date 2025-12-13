@@ -151,6 +151,36 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
       </div>
 
       <div ref={parentRef} className="results-scroll-container">
+        {/* Sticky row numbers overlay */}
+        <div className="row-numbers-sticky-column">
+          <div
+            style={{
+              height: `${rowVirtualizer.getTotalSize()}px`,
+              position: 'relative',
+            }}
+          >
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              const actualRowNumber = startIndex + virtualRow.index + 1;
+              return (
+                <div
+                  key={virtualRow.index}
+                  className={`row-number-sticky ${virtualRow.index % 2 === 0 ? 'even' : 'odd'}`}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '70px',
+                    height: `${virtualRow.size}px`,
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  {actualRowNumber}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         <div
           style={{
             height: `${rowVirtualizer.getTotalSize()}px`,
@@ -162,7 +192,6 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
             <tbody>
               {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                 const row = paginatedRows[virtualRow.index];
-                const actualRowNumber = startIndex + virtualRow.index + 1;
                 return (
                   <tr
                     key={virtualRow.index}
@@ -176,7 +205,7 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
                     }}
                     className={virtualRow.index % 2 === 0 ? 'even' : 'odd'}
                   >
-                    <td className="row-number-cell">{actualRowNumber}</td>
+                    <td className="row-number-cell-spacer"></td>
                     {row.map((cell, cellIdx) => {
                       const width = columnWidths[cellIdx] || 200;
                       return (
