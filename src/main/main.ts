@@ -68,3 +68,10 @@ ipcMain.handle('execute-query', async (_event, sql: string): Promise<QueryResult
   }
   return await connector.query(sql);
 });
+
+ipcMain.handle('get-schema', async () => {
+  if (!connector) {
+    throw new Error('Not connected to a database');
+  }
+  return await connector.getSchema();
+});

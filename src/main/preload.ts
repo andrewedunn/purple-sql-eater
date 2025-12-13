@@ -2,7 +2,7 @@
 // ABOUTME: Acts as a security bridge between Electron main and renderer processes.
 
 import { contextBridge, ipcRenderer } from 'electron';
-import type { ConnectionConfig, QueryResult } from '../shared/types';
+import type { ConnectionConfig, QueryResult, Schema } from '../shared/types';
 
 contextBridge.exposeInMainWorld('electron', {
   executeQuery: (sql: string): Promise<QueryResult> =>
@@ -13,6 +13,9 @@ contextBridge.exposeInMainWorld('electron', {
 
   disconnect: (): Promise<void> =>
     ipcRenderer.invoke('disconnect'),
+
+  getSchema: (): Promise<Schema> =>
+    ipcRenderer.invoke('get-schema'),
 });
 
 declare global {
@@ -21,6 +24,7 @@ declare global {
       executeQuery: (sql: string) => Promise<QueryResult>;
       connect: (config: ConnectionConfig) => Promise<void>;
       disconnect: () => Promise<void>;
+      getSchema: () => Promise<Schema>;
     };
   }
 }

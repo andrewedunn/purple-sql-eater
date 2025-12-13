@@ -1,0 +1,199 @@
+.schema-toggle.collapsed {
+  position: absolute;
+  left: 0;
+  top: calc(var(--toolbar-height) + var(--tabs-height));
+  width: 24px;
+  height: 40px;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: none;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  z-index: 10;
+}
+
+.schema-toggle.collapsed:hover {
+  background-color: var(--color-accent-light);
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.schema-browser {
+  width: var(--sidebar-width);
+  height: 100%;
+  background-color: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+}
+
+.schema-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.schema-header h3 {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+.schema-toggle-btn {
+  width: 24px;
+  height: 24px;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.schema-toggle-btn:hover {
+  background-color: var(--color-accent-light);
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.schema-search {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.schema-search input {
+  width: 100%;
+  padding: var(--space-2);
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-ui);
+  color: var(--color-text);
+  transition: all var(--transition-fast);
+}
+
+.schema-search input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-sm);
+}
+
+.schema-tables {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2);
+}
+
+.schema-table {
+  margin-bottom: var(--space-1);
+}
+
+.schema-table-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  user-select: none;
+}
+
+.schema-table-header:hover {
+  background-color: var(--color-surface-hover);
+}
+
+.expand-icon {
+  font-size: 8px;
+  color: var(--color-text-tertiary);
+  width: 12px;
+}
+
+.table-name {
+  flex: 1;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  font-family: var(--font-mono);
+  color: var(--color-text);
+}
+
+.table-schema {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  font-family: var(--font-mono);
+}
+
+.schema-columns {
+  margin-left: var(--space-4);
+  padding: var(--space-1) 0;
+}
+
+.schema-column {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: background-color var(--transition-fast);
+}
+
+.schema-column:hover {
+  background-color: var(--color-surface-hover);
+}
+
+.column-name {
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+}
+
+.column-type {
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+}
+
+.schema-empty,
+.schema-loading,
+.schema-error {
+  padding: var(--space-6);
+  text-align: center;
+}
+
+.schema-empty p,
+.schema-loading p {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+
+.schema-error p {
+  font-size: var(--font-size-sm);
+  color: var(--color-error);
+  margin-bottom: var(--space-3);
+}
+
+.schema-error button {
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--color-accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: white;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.schema-error button:hover {
+  background-color: var(--color-accent-hover);
+}

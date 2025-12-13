@@ -1,0 +1,262 @@
+// ABOUTME: Main application component with tabbed interface, connection management, and schema browser.
+// ABOUTME: Manages global state for connections, tabs, and query execution with keyboard shortcuts.
+
+import { useState, useEffect } from 'react';
+import Editor from '@monaco-editor/react';
+import type { QueryResult, ConnectionConfig } from '../shared/types';
+import { ConnectionDialog, ConnectionDialogResult } from './ConnectionDialog';
+import { ConnectionPicker, SavedConnection, saveConnection } from './components/ConnectionPicker';
+import { TabBar, Tab } from './components/TabBar';
+import { SchemaBrowser } from './components/SchemaBrowser';
+import './design-system.css';
+import './App-new.css';
+
+function App() {
+  const [tabs, setTabs] = useState<Tab[]>([
+    {
+      id: '1',
+      title: 'Query 1',
+      sql: '-- Write your SQL query here\nSELECT 1 as test',
+      results: null,
+    },
+  ]);
+  const [activeTabId, setActiveTabId] = useState('1');
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [currentConnection, setCurrentConnection] = useState<SavedConnection | null>(null);
+  const [showConnectionDialog, setShowConnectionDialog] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [showSchemaBrowser, setShowSchemaBrowser] = useState(true);
+  const [querySuccess, setQuerySuccess] = useState(false);
+
+  const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        handleExecute();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 't') {
+        e.preventDefault();
+        handleNewTab();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTabId, tabs, isConnected]);
+
+  const handleConnect = async (result: ConnectionDialogResult) => {
+    setConnectionError(null);
+    try {
+      await window.electron.connect(result.config);
+
+      const connection: SavedConnection = {
+        id: Date.now().toString(),
+        name: result.name,
+        config: result.config,
+      };
+
+      if (result.saveConnection) {
+        saveConnection(connection);
+      }
+
+      setCurrentConnection(connection);
+      setIsConnected(true);
+      setShowConnectionDialog(false);
+    } catch (err) {
+      setConnectionError(err instanceof Error ? err.message : 'Connection failed');
+    }
+  };
+
+  const handlePickerConnect = async (connection: SavedConnection) => {
+    setConnectionError(null);
+    try {
+      await window.electron.connect(connection.config);
+      setCurrentConnection(connection);
+      setIsConnected(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Connection failed');
+    }
+  };
+
+  const handleDisconnect = async () => {
+    try {
+      await window.electron.disconnect();
+      setIsConnected(false);
+      setCurrentConnection(null);
+      setTabs(tabs.map((tab) => ({ ...tab, results: null })));
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Disconnect failed');
+    }
+  };
+
+  const handleExecute = async () => {
+    if (!isConnected || !activeTab) return;
+
+    setError(null);
+    setIsExecuting(true);
+    setQuerySuccess(false);
+
+    try {
+      const result = await window.electron.executeQuery(activeTab.sql);
+
+      setTabs(tabs.map((tab) =>
+        tab.id === activeTabId ? { ...tab, results: result } : tab
+      ));
+
+      setQuerySuccess(true);
+      setTimeout(() => setQuerySuccess(false), 400);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setIsExecuting(false);
+    }
+  };
+
+  const handleSqlChange = (sql: string) => {
+    setTabs(tabs.map((tab) =>
+      tab.id === activeTabId ? { ...tab, sql } : tab
+    ));
+  };
+
+  const handleNewTab = () => {
+    const newId = Date.now().toString();
+    const newTab: Tab = {
+      id: newId,
+      title: `Query ${tabs.length + 1}`,
+      sql: '-- Write your SQL query here\n',
+      results: null,
+    };
+    setTabs([...tabs, newTab]);
+    setActiveTabId(newId);
+  };
+
+  const handleCloseTab = (tabId: string) => {
+    if (tabs.length === 1) return;
+
+    const tabIndex = tabs.findIndex((t) => t.id === tabId);
+    const newTabs = tabs.filter((t) => t.id !== tabId);
+
+    if (tabId === activeTabId) {
+      const newActiveTab = newTabs[Math.max(0, tabIndex - 1)];
+      setActiveTabId(newActiveTab.id);
+    }
+
+    setTabs(newTabs);
+  };
+
+  const handleRenameTab = (tabId: string, newTitle: string) => {
+    setTabs(tabs.map((tab) =>
+      tab.id === tabId ? { ...tab, title: newTitle } : tab
+    ));
+  };
+
+  return (
+    <div className="app">
+      {showConnectionDialog && (
+        <ConnectionDialog
+          onConnect={handleConnect}
+          onCancel={() => {
+            setShowConnectionDialog(false);
+            setConnectionError(null);
+          }}
+          externalError={connectionError}
+        />
+      )}
+
+      <div className="toolbar">
+        <ConnectionPicker
+          onConnect={handlePickerConnect}
+          onDisconnect={handleDisconnect}
+          isConnected={isConnected}
+          currentConnection={currentConnection}
+          onShowConnectionDialog={() => setShowConnectionDialog(true)}
+        />
+
+        <div className="toolbar-spacer"></div>
+
+        <button
+          className="btn-execute"
+          onClick={handleExecute}
+          disabled={isExecuting || !isConnected}
+          title="Execute query (Cmd+Enter)"
+        >
+          {isExecuting ? 'Executing...' : 'Execute'}
+        </button>
+
+        {activeTab.results && (
+          <span className={`results-count ${querySuccess ? 'pulse-once' : ''}`}>
+            {activeTab.results.rowCount} row{activeTab.results.rowCount !== 1 ? 's' : ''}
+          </span>
+        )}
+      </div>
+
+      <TabBar
+        tabs={tabs}
+        activeTabId={activeTabId}
+        onTabChange={setActiveTabId}
+        onTabClose={handleCloseTab}
+        onTabAdd={handleNewTab}
+        onTabRename={handleRenameTab}
+      />
+
+      <div className="content">
+        <SchemaBrowser
+          isVisible={showSchemaBrowser}
+          onToggle={() => setShowSchemaBrowser(!showSchemaBrowser)}
+          isConnected={isConnected}
+        />
+
+        <div className="main-panel">
+          <div className="editor-container">
+            <Editor
+              height="100%"
+              defaultLanguage="sql"
+              value={activeTab.sql}
+              onChange={(value) => handleSqlChange(value || '')}
+              theme="vs"
+              options={{
+                minimap: { enabled: false },
+                fontSize: 14,
+                lineHeight: 22,
+                padding: { top: 12 },
+                fontFamily: 'IBM Plex Mono, Monaco, Menlo, Consolas, monospace',
+              }}
+            />
+          </div>
+
+          <div className="results-container">
+            {error && <div className="error">{error}</div>}
+
+            {activeTab.results && (
+              <table className="results-table">
+                <thead>
+                  <tr>
+                    {activeTab.results.columns.map((col) => (
+                      <th key={col}>{col}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {activeTab.results.rows.map((row, i) => (
+                    <tr key={i}>
+                      {row.map((cell, j) => (
+                        <td key={j}>{String(cell)}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default App;

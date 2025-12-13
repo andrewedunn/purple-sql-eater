@@ -4,21 +4,34 @@
 import { useState } from 'react';
 import type { ConnectionConfig } from '../shared/types';
 
+export interface ConnectionDialogResult {
+  name: string;
+  config: ConnectionConfig;
+  saveConnection: boolean;
+}
+
 interface ConnectionDialogProps {
-  onConnect: (config: ConnectionConfig) => void;
+  onConnect: (result: ConnectionDialogResult) => void;
   onCancel: () => void;
   externalError?: string | null;
 }
 
 export function ConnectionDialog({ onConnect, onCancel, externalError }: ConnectionDialogProps) {
+  const [name, setName] = useState('');
   const [projectId, setProjectId] = useState('');
   const [credentialsJson, setCredentialsJson] = useState('');
+  const [saveConnection, setSaveConnection] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const displayError = externalError || error;
 
   const handleConnect = () => {
     setError(null);
+
+    if (saveConnection && !name.trim()) {
+      setError('Connection name is required when saving');
+      return;
+    }
 
     if (!projectId.trim()) {
       setError('Project ID is required');
@@ -37,7 +50,11 @@ export function ConnectionDialog({ onConnect, onCancel, externalError }: Connect
         projectId: projectId.trim(),
         credentials,
       };
-      onConnect(config);
+      onConnect({
+        name: name.trim() || projectId.trim(),
+        config,
+        saveConnection,
+      });
     } catch (err) {
       setError('Invalid JSON format for credentials');
     }
@@ -49,6 +66,18 @@ export function ConnectionDialog({ onConnect, onCancel, externalError }: Connect
         <h2>Connect to BigQuery</h2>
 
         {displayError && <div className="error">{displayError}</div>}
+
+        <div className="form-group">
+          <label htmlFor="name">Connection Name</label>
+          <input
+            id="name"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Production BigQuery"
+            disabled={!saveConnection}
+          />
+        </div>
 
         <div className="form-group">
           <label htmlFor="projectId">Project ID</label>
@@ -70,6 +99,17 @@ export function ConnectionDialog({ onConnect, onCancel, externalError }: Connect
             placeholder='{"type": "service_account", "project_id": "...", ...}'
             rows={10}
           />
+        </div>
+
+        <div className="form-group checkbox-group">
+          <label>
+            <input
+              type="checkbox"
+              checked={saveConnection}
+              onChange={(e) => setSaveConnection(e.target.checked)}
+            />
+            <span>Save this connection for future use</span>
+          </label>
         </div>
 
         <div className="dialog-buttons">
