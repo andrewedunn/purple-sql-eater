@@ -28,6 +28,7 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
   const [currentPage, setCurrentPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(100);
   const parentRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
 
   const sortedRows = [...results.rows];
   if (sortState.columnIndex !== null && sortState.direction) {
@@ -103,8 +104,49 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
     };
   }, [resizingColumn, resizeStartX, resizeStartWidth]);
 
+  useEffect(() => {
+    const bodyScroll = parentRef.current;
+    const headerScroll = headerRef.current;
+
+    if (!bodyScroll || !headerScroll) return;
+
+    const handleBodyScroll = () => {
+      headerScroll.scrollLeft = bodyScroll.scrollLeft;
+    };
+
+    bodyScroll.addEventListener('scroll', handleBodyScroll);
+    return () => bodyScroll.removeEventListener('scroll', handleBodyScroll);
+  }, []);
+
   return (
     <div className="results-table-container">
+      <div ref={headerRef} className="results-table-header-container">
+        <table className="results-table-header-table">
+          <thead>
+            <tr>
+              <th className="row-number-header">#</th>
+              {results.columns.map((col, idx) => (
+                <th
+                  key={idx}
+                  onClick={() => handleSort(idx)}
+                  className="sortable"
+                  title="Click to sort"
+                  style={columnWidths[idx] ? { width: `${columnWidths[idx]}px`, minWidth: `${columnWidths[idx]}px` } : { minWidth: '150px' }}
+                >
+                  <span className="th-content">
+                    {col}{getSortIndicator(idx)}
+                  </span>
+                  <span
+                    className="resize-handle"
+                    onMouseDown={(e) => handleResizeStart(e, idx)}
+                  />
+                </th>
+              ))}
+            </tr>
+          </thead>
+        </table>
+      </div>
+
       <div ref={parentRef} className="results-scroll-container">
         <div
           style={{
@@ -113,29 +155,7 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
             position: 'relative',
           }}
         >
-          <table className="results-table-virtualized">
-            <thead className="results-table-header">
-              <tr>
-                <th className="row-number-header">#</th>
-                {results.columns.map((col, idx) => (
-                  <th
-                    key={idx}
-                    onClick={() => handleSort(idx)}
-                    className="sortable"
-                    title="Click to sort"
-                    style={columnWidths[idx] ? { width: `${columnWidths[idx]}px` } : undefined}
-                  >
-                    <span className="th-content">
-                      {col}{getSortIndicator(idx)}
-                    </span>
-                    <span
-                      className="resize-handle"
-                      onMouseDown={(e) => handleResizeStart(e, idx)}
-                    />
-                  </th>
-                ))}
-              </tr>
-            </thead>
+          <table className="results-table-body">
             <tbody>
               {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                 const row = paginatedRows[virtualRow.index];
@@ -157,7 +177,7 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
                     {row.map((cell, cellIdx) => (
                       <td
                         key={cellIdx}
-                        style={columnWidths[cellIdx] ? { width: `${columnWidths[cellIdx]}px` } : undefined}
+                        style={columnWidths[cellIdx] ? { width: `${columnWidths[cellIdx]}px`, minWidth: `${columnWidths[cellIdx]}px` } : { minWidth: '150px' }}
                       >
                         {String(cell ?? '')}
                       </td>
