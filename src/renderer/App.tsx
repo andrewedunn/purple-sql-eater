@@ -3,13 +3,39 @@
 
 import { useState } from 'react';
 import Editor from '@monaco-editor/react';
-import type { QueryResult } from '../shared/types';
+import type { QueryResult, ConnectionConfig } from '../shared/types';
+import { ConnectionDialog } from './ConnectionDialog';
 
 function App() {
   const [sql, setSql] = useState('-- Write your SQL query here\nSELECT 1 as test');
   const [results, setResults] = useState<QueryResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [showConnectionDialog, setShowConnectionDialog] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+
+  const handleConnect = async (config: ConnectionConfig) => {
+    setConnectionError(null);
+    try {
+      await window.electron.connect(config);
+      setIsConnected(true);
+      setShowConnectionDialog(false);
+    } catch (err) {
+      setConnectionError(err instanceof Error ? err.message : 'Connection failed');
+    }
+  };
+
+  const handleDisconnect = async () => {
+    try {
+      await window.electron.disconnect();
+      setIsConnected(false);
+      setResults(null);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Disconnect failed');
+    }
+  };
 
   const handleExecute = async () => {
     setError(null);
@@ -28,10 +54,38 @@ function App() {
 
   return (
     <div className="app">
+      {showConnectionDialog && (
+        <ConnectionDialog
+          onConnect={handleConnect}
+          onCancel={() => {
+            setShowConnectionDialog(false);
+            setConnectionError(null);
+          }}
+          externalError={connectionError}
+        />
+      )}
+
       <div className="toolbar">
-        <button onClick={handleExecute} disabled={isExecuting}>
+        {isConnected ? (
+          <>
+            <div className="connection-status connected">
+              ● Connected to BigQuery
+            </div>
+            <button onClick={handleDisconnect}>Disconnect</button>
+          </>
+        ) : (
+          <>
+            <div className="connection-status disconnected">
+              ○ Not connected
+            </div>
+            <button onClick={() => setShowConnectionDialog(true)}>Connect</button>
+          </>
+        )}
+
+        <button onClick={handleExecute} disabled={isExecuting || !isConnected}>
           {isExecuting ? 'Executing...' : 'Execute Query'}
         </button>
+
         {results && (
           <span className="status">
             {results.rowCount} row{results.rowCount !== 1 ? 's' : ''}
