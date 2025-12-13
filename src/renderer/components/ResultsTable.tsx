@@ -29,6 +29,7 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
   const [rowsPerPage, setRowsPerPage] = useState(100);
   const parentRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
+  const rowNumbersRef = useRef<HTMLDivElement>(null);
 
   const sortedRows = [...results.rows];
   if (sortState.columnIndex !== null && sortState.direction) {
@@ -107,11 +108,13 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
   useEffect(() => {
     const bodyScroll = parentRef.current;
     const headerScroll = headerRef.current;
+    const rowNumbersScroll = rowNumbersRef.current;
 
-    if (!bodyScroll || !headerScroll) return;
+    if (!bodyScroll || !headerScroll || !rowNumbersScroll) return;
 
     const handleBodyScroll = () => {
       headerScroll.scrollLeft = bodyScroll.scrollLeft;
+      rowNumbersScroll.scrollTop = bodyScroll.scrollTop;
     };
 
     bodyScroll.addEventListener('scroll', handleBodyScroll);
@@ -152,7 +155,7 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
 
       <div ref={parentRef} className="results-scroll-container">
         {/* Sticky row numbers overlay */}
-        <div className="row-numbers-sticky-column">
+        <div ref={rowNumbersRef} className="row-numbers-sticky-column">
           <div
             style={{
               height: `${rowVirtualizer.getTotalSize()}px`,

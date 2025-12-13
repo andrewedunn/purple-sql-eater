@@ -66,9 +66,15 @@
   top: 0;
   bottom: 0;
   width: 70px;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: scroll;
   z-index: 10;
   pointer-events: none;
+  scrollbar-width: none;
+}
+
+.row-numbers-sticky-column::-webkit-scrollbar {
+  display: none;
 }
 
 .row-number-sticky {
