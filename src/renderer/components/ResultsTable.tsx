@@ -58,6 +58,10 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
     overscan: 10,
   });
 
+  const totalTableWidth = results.columns.reduce((sum, _, idx) => {
+    return sum + (columnWidths[idx] || 200);
+  }, 0);
+
   const handleSort = (columnIndex: number) => {
     setSortState((prev) => {
       if (prev.columnIndex === columnIndex) {
@@ -117,8 +121,24 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
       rowNumbersScroll.scrollTop = dataScroll.scrollTop;
     };
 
+    const forwardWheelToData = (e: WheelEvent) => {
+      e.preventDefault();
+      dataScroll.scrollBy({
+        left: e.deltaX,
+        top: e.deltaY,
+        behavior: 'auto'
+      });
+    };
+
     dataScroll.addEventListener('scroll', handleDataScroll);
-    return () => dataScroll.removeEventListener('scroll', handleDataScroll);
+    headersScroll.addEventListener('wheel', forwardWheelToData, { passive: false });
+    rowNumbersScroll.addEventListener('wheel', forwardWheelToData, { passive: false });
+
+    return () => {
+      dataScroll.removeEventListener('scroll', handleDataScroll);
+      headersScroll.removeEventListener('wheel', forwardWheelToData);
+      rowNumbersScroll.removeEventListener('wheel', forwardWheelToData);
+    };
   }, []);
 
   return (
@@ -161,33 +181,33 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
 
         {/* Row numbers */}
         <div className="row-numbers-container">
-          <div
-            ref={rowNumbersScrollRef}
-            className="row-numbers-scroll"
-            style={{
-              height: `${rowVirtualizer.getTotalSize()}px`,
-              position: 'relative',
-            }}
-          >
-            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-              const actualRowNumber = startIndex + virtualRow.index + 1;
-              return (
-                <div
-                  key={virtualRow.index}
-                  className={`row-number-cell ${virtualRow.index % 2 === 0 ? 'even' : 'odd'}`}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: `${virtualRow.size}px`,
-                    transform: `translateY(${virtualRow.start}px)`,
-                  }}
-                >
-                  {actualRowNumber}
-                </div>
-              );
-            })}
+          <div ref={rowNumbersScrollRef} className="row-numbers-scroll">
+            <div
+              style={{
+                height: `${rowVirtualizer.getTotalSize()}px`,
+                position: 'relative',
+              }}
+            >
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const actualRowNumber = startIndex + virtualRow.index + 1;
+                return (
+                  <div
+                    key={virtualRow.index}
+                    className={`row-number-cell ${virtualRow.index % 2 === 0 ? 'even' : 'odd'}`}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: `${virtualRow.size}px`,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    {actualRowNumber}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -211,7 +231,7 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
                         position: 'absolute',
                         top: 0,
                         left: 0,
-                        width: '100%',
+                        width: `${totalTableWidth}px`,
                         height: `${virtualRow.size}px`,
                         transform: `translateY(${virtualRow.start}px)`,
                       }}

@@ -40,7 +40,7 @@
 }
 
 .headers-scroll {
-  overflow-x: auto;
+  overflow-x: scroll;
   overflow-y: hidden;
   scrollbar-width: none;
 }
@@ -91,8 +91,14 @@
 }
 
 .row-numbers-scroll {
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: scroll;
   height: 100%;
+  scrollbar-width: none;
+}
+
+.row-numbers-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 .row-number-cell {
@@ -163,7 +169,7 @@
 }
 
 .results-table-body tbody tr.odd {
-  background: transparent;
+  background: var(--color-bg);
 }
 
 .results-table-body tbody tr:hover td {
