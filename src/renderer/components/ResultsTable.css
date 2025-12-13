@@ -1,0 +1,132 @@
+/* ABOUTME: Styles for virtualized results table with sticky headers and reduced padding. */
+/* ABOUTME: Uses position: sticky for headers and absolute positioning for virtual rows. */
+
+.results-table-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+.results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  flex-shrink: 0;
+}
+
+.results-info {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  font-family: var(--font-ui);
+}
+
+.results-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-action {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-family: var(--font-ui);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-action:hover {
+  background: var(--color-accent);
+  color: white;
+  border-color: var(--color-accent);
+}
+
+.results-scroll-container {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+}
+
+.results-table-virtualized {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.results-table-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--color-surface);
+}
+
+.results-table-header th {
+  padding: 6px 10px;
+  text-align: left;
+  font-weight: 500;
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+  user-select: none;
+  position: relative;
+}
+
+.results-table-header th.sortable {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.results-table-header th.sortable:hover {
+  background: var(--color-bg);
+}
+
+.th-content {
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.resize-handle {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  user-select: none;
+  z-index: 1;
+}
+
+.resize-handle:hover {
+  background: var(--color-accent);
+  opacity: 0.3;
+}
+
+.results-table-virtualized tbody tr {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.results-table-virtualized tbody tr.even {
+  background: var(--color-surface);
+}
+
+.results-table-virtualized tbody tr.odd {
+  background: var(--color-bg);
+}
+
+.results-table-virtualized td {
+  padding: 4px 10px;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 400px;
+}

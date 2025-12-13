@@ -9,6 +9,7 @@ import { ConnectionPicker, SavedConnection, saveConnection } from './components/
 import { TabBar, Tab } from './components/TabBar';
 import { SchemaBrowser } from './components/SchemaBrowser';
 import { ThemeToggle } from './components/ThemeToggle';
+import { ResultsTable } from './components/ResultsTable';
 import './design-system.css';
 import './App-new.css';
 
@@ -171,6 +172,43 @@ function App() {
     ));
   };
 
+  const handleExportCSV = () => {
+    if (!activeTab.results) return;
+
+    const { columns, rows } = activeTab.results;
+    const csvContent = [
+      columns.join(','),
+      ...rows.map((row) =>
+        row.map((cell) => {
+          const value = String(cell ?? '');
+          return value.includes(',') || value.includes('"') || value.includes('\n')
+            ? `"${value.replace(/"/g, '""')}"`
+            : value;
+        }).join(',')
+      ),
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `query-results-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCopyToClipboard = () => {
+    if (!activeTab.results) return;
+
+    const { columns, rows } = activeTab.results;
+    const tsvContent = [
+      columns.join('\t'),
+      ...rows.map((row) => row.map((cell) => String(cell ?? '')).join('\t')),
+    ].join('\n');
+
+    navigator.clipboard.writeText(tsvContent);
+  };
+
   return (
     <div className="app">
       {showConnectionDialog && (
@@ -251,24 +289,11 @@ function App() {
             {error && <div className="error">{error}</div>}
 
             {activeTab.results && (
-              <table className="results-table">
-                <thead>
-                  <tr>
-                    {activeTab.results.columns.map((col) => (
-                      <th key={col}>{col}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {activeTab.results.rows.map((row, i) => (
-                    <tr key={i}>
-                      {row.map((cell, j) => (
-                        <td key={j}>{String(cell)}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <ResultsTable
+                results={activeTab.results}
+                onExportCSV={handleExportCSV}
+                onCopyToClipboard={handleCopyToClipboard}
+              />
             )}
           </div>
         </div>
