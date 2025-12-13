@@ -87,8 +87,7 @@
 .results-container {
   flex: 1;
   min-height: 0;
-  overflow: auto;
-  padding: var(--space-4);
+  overflow: hidden;
   background-color: var(--color-bg);
 }
 

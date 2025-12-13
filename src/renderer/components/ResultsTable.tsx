@@ -27,9 +27,9 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
   const [resizeStartWidth, setResizeStartWidth] = useState(0);
   const [currentPage, setCurrentPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(100);
-  const parentRef = useRef<HTMLDivElement>(null);
-  const headerRef = useRef<HTMLDivElement>(null);
-  const rowNumbersRef = useRef<HTMLDivElement>(null);
+  const dataScrollRef = useRef<HTMLDivElement>(null);
+  const headersScrollRef = useRef<HTMLDivElement>(null);
+  const rowNumbersScrollRef = useRef<HTMLDivElement>(null);
 
   const sortedRows = [...results.rows];
   if (sortState.columnIndex !== null && sortState.direction) {
@@ -53,7 +53,7 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
 
   const rowVirtualizer = useVirtualizer({
     count: paginatedRows.length,
-    getScrollElement: () => parentRef.current,
+    getScrollElement: () => dataScrollRef.current,
     estimateSize: () => 32,
     overscan: 10,
   });
@@ -106,57 +106,64 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
   }, [resizingColumn, resizeStartX, resizeStartWidth]);
 
   useEffect(() => {
-    const bodyScroll = parentRef.current;
-    const headerScroll = headerRef.current;
-    const rowNumbersScroll = rowNumbersRef.current;
+    const dataScroll = dataScrollRef.current;
+    const headersScroll = headersScrollRef.current;
+    const rowNumbersScroll = rowNumbersScrollRef.current;
 
-    if (!bodyScroll || !headerScroll || !rowNumbersScroll) return;
+    if (!dataScroll || !headersScroll || !rowNumbersScroll) return;
 
-    const handleBodyScroll = () => {
-      headerScroll.scrollLeft = bodyScroll.scrollLeft;
-      rowNumbersScroll.scrollTop = bodyScroll.scrollTop;
+    const handleDataScroll = () => {
+      headersScroll.scrollLeft = dataScroll.scrollLeft;
+      rowNumbersScroll.scrollTop = dataScroll.scrollTop;
     };
 
-    bodyScroll.addEventListener('scroll', handleBodyScroll);
-    return () => bodyScroll.removeEventListener('scroll', handleBodyScroll);
+    dataScroll.addEventListener('scroll', handleDataScroll);
+    return () => dataScroll.removeEventListener('scroll', handleDataScroll);
   }, []);
 
   return (
     <div className="results-table-container">
-      <div ref={headerRef} className="results-table-header-container">
-        <table className="results-table-header-table">
-          <thead>
-            <tr>
-              <th className="row-number-header">#</th>
-              {results.columns.map((col, idx) => {
-                const width = columnWidths[idx] || 200;
-                return (
-                  <th
-                    key={idx}
-                    onClick={() => handleSort(idx)}
-                    className="sortable"
-                    title="Click to sort"
-                    style={{ width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }}
-                  >
-                    <span className="th-content">
-                      {col}{getSortIndicator(idx)}
-                    </span>
-                    <span
-                      className="resize-handle"
-                      onMouseDown={(e) => handleResizeStart(e, idx)}
-                    />
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-        </table>
-      </div>
+      <div className="table-grid">
+        {/* Top-left corner */}
+        <div className="header-corner">#</div>
 
-      <div ref={parentRef} className="results-scroll-container">
-        {/* Sticky row numbers overlay */}
-        <div ref={rowNumbersRef} className="row-numbers-sticky-column">
+        {/* Column headers */}
+        <div className="headers-container">
+          <div ref={headersScrollRef} className="headers-scroll">
+            <table className="results-table-header-table">
+              <thead>
+                <tr>
+                  {results.columns.map((col, idx) => {
+                    const width = columnWidths[idx] || 200;
+                    return (
+                      <th
+                        key={idx}
+                        onClick={() => handleSort(idx)}
+                        className="sortable"
+                        title="Click to sort"
+                        style={{ width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }}
+                      >
+                        <span className="th-content">
+                          {col}{getSortIndicator(idx)}
+                        </span>
+                        <span
+                          className="resize-handle"
+                          onMouseDown={(e) => handleResizeStart(e, idx)}
+                        />
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+            </table>
+          </div>
+        </div>
+
+        {/* Row numbers */}
+        <div className="row-numbers-container">
           <div
+            ref={rowNumbersScrollRef}
+            className="row-numbers-scroll"
             style={{
               height: `${rowVirtualizer.getTotalSize()}px`,
               position: 'relative',
@@ -167,12 +174,12 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
               return (
                 <div
                   key={virtualRow.index}
-                  className={`row-number-sticky ${virtualRow.index % 2 === 0 ? 'even' : 'odd'}`}
+                  className={`row-number-cell ${virtualRow.index % 2 === 0 ? 'even' : 'odd'}`}
                   style={{
                     position: 'absolute',
                     top: 0,
                     left: 0,
-                    width: '70px',
+                    width: '100%',
                     height: `${virtualRow.size}px`,
                     transform: `translateY(${virtualRow.start}px)`,
                   }}
@@ -184,47 +191,49 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
           </div>
         </div>
 
-        <div
-          style={{
-            height: `${rowVirtualizer.getTotalSize()}px`,
-            width: '100%',
-            position: 'relative',
-          }}
-        >
-          <table className="results-table-body">
-            <tbody>
-              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                const row = paginatedRows[virtualRow.index];
-                return (
-                  <tr
-                    key={virtualRow.index}
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      height: `${virtualRow.size}px`,
-                      transform: `translateY(${virtualRow.start}px)`,
-                    }}
-                    className={virtualRow.index % 2 === 0 ? 'even' : 'odd'}
-                  >
-                    <td className="row-number-cell-spacer"></td>
-                    {row.map((cell, cellIdx) => {
-                      const width = columnWidths[cellIdx] || 200;
-                      return (
-                        <td
-                          key={cellIdx}
-                          style={{ width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }}
-                        >
-                          {String(cell ?? '')}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        {/* Data cells */}
+        <div ref={dataScrollRef} className="data-container">
+          <div
+            style={{
+              height: `${rowVirtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            <table className="results-table-body">
+              <tbody>
+                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const row = paginatedRows[virtualRow.index];
+                  return (
+                    <tr
+                      key={virtualRow.index}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: `${virtualRow.size}px`,
+                        transform: `translateY(${virtualRow.start}px)`,
+                      }}
+                      className={virtualRow.index % 2 === 0 ? 'even' : 'odd'}
+                    >
+                      {row.map((cell, cellIdx) => {
+                        const width = columnWidths[cellIdx] || 200;
+                        return (
+                          <td
+                            key={cellIdx}
+                            style={{ width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }}
+                          >
+                            {String(cell ?? '')}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 

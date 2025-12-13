@@ -1,24 +1,51 @@
 /* ABOUTME: Styles for virtualized results table with fixed headers and reduced padding. */
-/* ABOUTME: Uses separate header table and synchronized column widths for alignment. */
+/* ABOUTME: Uses CSS Grid layout with synchronized scroll containers for data grid pattern. */
 
 .results-table-container {
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow: hidden;
   background: var(--color-surface);
 }
 
-.results-table-header-container {
-  flex-shrink: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
+.table-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  grid-template-rows: auto 1fr;
+  overflow: hidden;
+}
+
+.header-corner {
+  grid-column: 1;
+  grid-row: 1;
+  background: var(--color-bg);
+  border-right: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+  z-index: 3;
+}
+
+.headers-container {
+  grid-column: 2;
+  grid-row: 1;
+  overflow: hidden;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-bg);
+}
+
+.headers-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none;
 }
 
-.results-table-header-container::-webkit-scrollbar {
+.headers-scroll::-webkit-scrollbar {
   display: none;
 }
 
@@ -32,7 +59,7 @@
 }
 
 .results-table-header-table th {
-  padding: 10px 12px;
+  padding: 8px 10px;
   text-align: left;
   font-weight: 600;
   color: var(--color-text);
@@ -54,48 +81,45 @@
   color: var(--color-accent);
 }
 
-.results-scroll-container {
-  flex: 1;
-  overflow: auto;
-  position: relative;
+.row-numbers-container {
+  grid-column: 1;
+  grid-row: 2;
+  overflow: hidden;
+  background: var(--color-bg);
+  border-right: 1px solid var(--color-border);
+  z-index: 2;
 }
 
-.row-numbers-sticky-column {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 70px;
-  overflow-x: hidden;
-  overflow-y: scroll;
-  z-index: 10;
-  pointer-events: none;
-  scrollbar-width: none;
+.row-numbers-scroll {
+  overflow: hidden;
+  height: 100%;
 }
 
-.row-numbers-sticky-column::-webkit-scrollbar {
-  display: none;
-}
-
-.row-number-sticky {
+.row-number-cell {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  padding: 7px 12px;
+  padding: 6px 10px;
   color: var(--color-text-tertiary);
   font-size: var(--font-size-xs);
   font-family: var(--font-mono);
-  border-right: 1px solid var(--color-border);
   border-bottom: 1px solid var(--color-border-light);
-  pointer-events: auto;
+  font-weight: 500;
 }
 
-.row-number-sticky.even {
+.row-number-cell.even {
   background: var(--color-surface);
 }
 
-.row-number-sticky.odd {
+.row-number-cell.odd {
   background: var(--color-bg);
+}
+
+.data-container {
+  grid-column: 2;
+  grid-row: 2;
+  overflow: auto;
+  position: relative;
 }
 
 .results-table-body {
@@ -105,29 +129,6 @@
   border-spacing: 0;
   font-family: var(--font-mono);
   font-size: var(--font-size-sm);
-}
-
-.row-number-header {
-  width: 70px !important;
-  min-width: 70px !important;
-  max-width: 70px !important;
-  text-align: right;
-  color: var(--color-text-tertiary);
-  font-weight: 500;
-  background: var(--color-bg);
-  border-right: 1px solid var(--color-border) !important;
-  position: sticky;
-  left: 0;
-  z-index: 2;
-}
-
-.row-number-cell-spacer {
-  width: 70px !important;
-  min-width: 70px !important;
-  max-width: 70px !important;
-  padding: 0;
-  border: none;
-  background: transparent;
 }
 
 .th-content {
@@ -170,7 +171,7 @@
 }
 
 .results-table-body td {
-  padding: 7px 12px;
+  padding: 6px 10px;
   color: var(--color-text);
   white-space: nowrap;
   overflow: hidden;
