@@ -8,8 +8,11 @@ import { ConnectionDialog, ConnectionDialogResult } from './ConnectionDialog';
 import { ConnectionPicker, SavedConnection, saveConnection } from './components/ConnectionPicker';
 import { TabBar, Tab } from './components/TabBar';
 import { SchemaBrowser } from './components/SchemaBrowser';
+import { ThemeToggle } from './components/ThemeToggle';
 import './design-system.css';
 import './App-new.css';
+
+const THEME_STORAGE_KEY = 'purple-sql-eater-theme';
 
 function App() {
   const [tabs, setTabs] = useState<Tab[]>([
@@ -29,8 +32,21 @@ function App() {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [showSchemaBrowser, setShowSchemaBrowser] = useState(true);
   const [querySuccess, setQuerySuccess] = useState(false);
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const stored = localStorage.getItem(THEME_STORAGE_KEY);
+    return (stored as 'light' | 'dark') || 'light';
+  });
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(theme === 'light' ? 'dark' : 'light');
+  };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -193,6 +209,8 @@ function App() {
             {activeTab.results.rowCount} row{activeTab.results.rowCount !== 1 ? 's' : ''}
           </span>
         )}
+
+        <ThemeToggle theme={theme} onToggle={toggleTheme} />
       </div>
 
       <TabBar
@@ -218,7 +236,7 @@ function App() {
               defaultLanguage="sql"
               value={activeTab.sql}
               onChange={(value) => handleSqlChange(value || '')}
-              theme="vs"
+              theme={theme === 'dark' ? 'vs-dark' : 'vs'}
               options={{
                 minimap: { enabled: false },
                 fontSize: 14,

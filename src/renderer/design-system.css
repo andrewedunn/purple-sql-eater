@@ -72,6 +72,33 @@
   --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* Dark mode colors */
+[data-theme="dark"] {
+  --color-bg: #0f0f0f;
+  --color-surface: #1a1a1a;
+  --color-surface-hover: #222222;
+  --color-border: #2a2a2a;
+  --color-border-light: #242424;
+
+  --color-text: #e8e8e8;
+  --color-text-secondary: #a3a3a3;
+  --color-text-tertiary: #737373;
+
+  --color-accent: #8b5cf6;
+  --color-accent-hover: #a78bfa;
+  --color-accent-light: #2e1065;
+
+  --color-success: #10b981;
+  --color-success-light: #064e3b;
+  --color-error: #ef4444;
+  --color-error-light: #7f1d1d;
+
+  /* Shadows with subtle purple tint - stronger in dark mode */
+  --shadow-sm: 0 1px 3px rgba(139, 92, 246, 0.15);
+  --shadow-md: 0 2px 10px rgba(139, 92, 246, 0.2);
+  --shadow-lg: 0 4px 20px rgba(139, 92, 246, 0.25);
+}
+
 /* Reset and base styles */
 * {
   margin: 0;
