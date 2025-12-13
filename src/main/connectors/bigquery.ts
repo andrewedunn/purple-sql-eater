@@ -93,8 +93,16 @@ export class BigQueryConnector implements DatabaseConnector {
     }
 
     const columns = Object.keys(rows[0]);
-    const formattedRows = rows.map((row) =>
-      columns.map((col) => this.serializeValue(row[col]))
+
+    const jsonSafeRows = JSON.parse(JSON.stringify(rows, (_key, value) => {
+      if (typeof value === 'bigint') {
+        return value.toString();
+      }
+      return value;
+    }));
+
+    const formattedRows = jsonSafeRows.map((row: any) =>
+      columns.map((col) => row[col])
     );
 
     return {
