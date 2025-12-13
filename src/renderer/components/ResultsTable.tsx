@@ -125,23 +125,26 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
           <thead>
             <tr>
               <th className="row-number-header">#</th>
-              {results.columns.map((col, idx) => (
-                <th
-                  key={idx}
-                  onClick={() => handleSort(idx)}
-                  className="sortable"
-                  title="Click to sort"
-                  style={columnWidths[idx] ? { width: `${columnWidths[idx]}px`, minWidth: `${columnWidths[idx]}px` } : { minWidth: '150px' }}
-                >
-                  <span className="th-content">
-                    {col}{getSortIndicator(idx)}
-                  </span>
-                  <span
-                    className="resize-handle"
-                    onMouseDown={(e) => handleResizeStart(e, idx)}
-                  />
-                </th>
-              ))}
+              {results.columns.map((col, idx) => {
+                const width = columnWidths[idx] || 200;
+                return (
+                  <th
+                    key={idx}
+                    onClick={() => handleSort(idx)}
+                    className="sortable"
+                    title="Click to sort"
+                    style={{ width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }}
+                  >
+                    <span className="th-content">
+                      {col}{getSortIndicator(idx)}
+                    </span>
+                    <span
+                      className="resize-handle"
+                      onMouseDown={(e) => handleResizeStart(e, idx)}
+                    />
+                  </th>
+                );
+              })}
             </tr>
           </thead>
         </table>
@@ -174,14 +177,17 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
                     className={virtualRow.index % 2 === 0 ? 'even' : 'odd'}
                   >
                     <td className="row-number-cell">{actualRowNumber}</td>
-                    {row.map((cell, cellIdx) => (
-                      <td
-                        key={cellIdx}
-                        style={columnWidths[cellIdx] ? { width: `${columnWidths[cellIdx]}px`, minWidth: `${columnWidths[cellIdx]}px` } : { minWidth: '150px' }}
-                      >
-                        {String(cell ?? '')}
-                      </td>
-                    ))}
+                    {row.map((cell, cellIdx) => {
+                      const width = columnWidths[cellIdx] || 200;
+                      return (
+                        <td
+                          key={cellIdx}
+                          style={{ width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }}
+                        >
+                          {String(cell ?? '')}
+                        </td>
+                      );
+                    })}
                   </tr>
                 );
               })}
