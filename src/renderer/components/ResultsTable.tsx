@@ -25,6 +25,8 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
   const [resizingColumn, setResizingColumn] = useState<number | null>(null);
   const [resizeStartX, setResizeStartX] = useState(0);
   const [resizeStartWidth, setResizeStartWidth] = useState(0);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(100);
   const parentRef = useRef<HTMLDivElement>(null);
 
   const sortedRows = [...results.rows];
@@ -41,8 +43,14 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
     });
   }
 
+  const totalRows = sortedRows.length;
+  const totalPages = Math.ceil(totalRows / rowsPerPage);
+  const startIndex = currentPage * rowsPerPage;
+  const endIndex = Math.min(startIndex + rowsPerPage, totalRows);
+  const paginatedRows = sortedRows.slice(startIndex, endIndex);
+
   const rowVirtualizer = useVirtualizer({
-    count: sortedRows.length,
+    count: paginatedRows.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 32,
     overscan: 10,
@@ -97,24 +105,6 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
 
   return (
     <div className="results-table-container">
-      <div className="results-header">
-        <div className="results-info">
-          {results.rowCount.toLocaleString()} row{results.rowCount !== 1 ? 's' : ''} × {results.columns.length} column{results.columns.length !== 1 ? 's' : ''}
-        </div>
-        <div className="results-actions">
-          {onCopyToClipboard && (
-            <button className="btn-action" onClick={onCopyToClipboard} title="Copy to clipboard">
-              Copy
-            </button>
-          )}
-          {onExportCSV && (
-            <button className="btn-action" onClick={onExportCSV} title="Export as CSV">
-              Export CSV
-            </button>
-          )}
-        </div>
-      </div>
-
       <div ref={parentRef} className="results-scroll-container">
         <div
           style={{
@@ -126,6 +116,7 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
           <table className="results-table-virtualized">
             <thead className="results-table-header">
               <tr>
+                <th className="row-number-header">#</th>
                 {results.columns.map((col, idx) => (
                   <th
                     key={idx}
@@ -147,7 +138,8 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
             </thead>
             <tbody>
               {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                const row = sortedRows[virtualRow.index];
+                const row = paginatedRows[virtualRow.index];
+                const actualRowNumber = startIndex + virtualRow.index + 1;
                 return (
                   <tr
                     key={virtualRow.index}
@@ -161,6 +153,7 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
                     }}
                     className={virtualRow.index % 2 === 0 ? 'even' : 'odd'}
                   >
+                    <td className="row-number-cell">{actualRowNumber}</td>
                     {row.map((cell, cellIdx) => (
                       <td
                         key={cellIdx}
@@ -174,6 +167,87 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
               })}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <div className="results-footer">
+        <div className="results-info">
+          {totalRows.toLocaleString()} row{totalRows !== 1 ? 's' : ''} × {results.columns.length} column{results.columns.length !== 1 ? 's' : ''}
+          {totalPages > 1 && (
+            <span className="page-info">
+              {' '}· Page {currentPage + 1} of {totalPages} (showing {startIndex + 1}-{endIndex})
+            </span>
+          )}
+        </div>
+
+        <div className="results-controls">
+          <label className="rows-per-page-label">
+            Rows per page:
+            <select
+              value={rowsPerPage}
+              onChange={(e) => {
+                setRowsPerPage(Number(e.target.value));
+                setCurrentPage(0);
+              }}
+              className="rows-per-page-select"
+            >
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+              <option value={500}>500</option>
+              <option value={1000}>1000</option>
+              <option value={totalRows}>All</option>
+            </select>
+          </label>
+
+          {totalPages > 1 && (
+            <div className="pagination-controls">
+              <button
+                onClick={() => setCurrentPage(0)}
+                disabled={currentPage === 0}
+                className="btn-pagination"
+                title="First page"
+              >
+                «
+              </button>
+              <button
+                onClick={() => setCurrentPage(currentPage - 1)}
+                disabled={currentPage === 0}
+                className="btn-pagination"
+                title="Previous page"
+              >
+                ‹
+              </button>
+              <button
+                onClick={() => setCurrentPage(currentPage + 1)}
+                disabled={currentPage >= totalPages - 1}
+                className="btn-pagination"
+                title="Next page"
+              >
+                ›
+              </button>
+              <button
+                onClick={() => setCurrentPage(totalPages - 1)}
+                disabled={currentPage >= totalPages - 1}
+                className="btn-pagination"
+                title="Last page"
+              >
+                »
+              </button>
+            </div>
+          )}
+
+          <div className="results-actions">
+            {onCopyToClipboard && (
+              <button className="btn-action" onClick={onCopyToClipboard} title="Copy to clipboard">
+                Copy
+              </button>
+            )}
+            {onExportCSV && (
+              <button className="btn-action" onClick={onExportCSV} title="Export as CSV">
+                Export CSV
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
