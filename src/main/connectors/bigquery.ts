@@ -22,6 +22,38 @@ export class BigQueryConnector implements DatabaseConnector {
   private client: BigQuery | null = null;
   private projectId: string | null = null;
 
+  private serializeValue(value: unknown): unknown {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    if (typeof value === 'bigint') {
+      return value.toString();
+    }
+
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+
+    if (typeof value === 'object' && value !== null) {
+      if ('value' in value && typeof (value as any).value !== 'undefined') {
+        return this.serializeValue((value as any).value);
+      }
+
+      if (Array.isArray(value)) {
+        return value.map((item) => this.serializeValue(item));
+      }
+
+      const serialized: Record<string, unknown> = {};
+      for (const [key, val] of Object.entries(value)) {
+        serialized[key] = this.serializeValue(val);
+      }
+      return serialized;
+    }
+
+    return value;
+  }
+
   async connect(config: ConnectionConfig): Promise<void> {
     const bqConfig = config as BigQueryConfig;
     this.projectId = bqConfig.projectId;
@@ -61,7 +93,9 @@ export class BigQueryConnector implements DatabaseConnector {
     }
 
     const columns = Object.keys(rows[0]);
-    const formattedRows = rows.map((row) => columns.map((col) => row[col]));
+    const formattedRows = rows.map((row) =>
+      columns.map((col) => this.serializeValue(row[col]))
+    );
 
     return {
       columns,
