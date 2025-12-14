@@ -3,8 +3,7 @@
   flex-direction: column;
   background-color: var(--color-surface);
   border-right: 1px solid var(--color-border);
-  width: var(--sidebar-width);
-  transition: width var(--transition-base);
+  width: 100%;
   flex: 1;
   min-height: 0;
 }
