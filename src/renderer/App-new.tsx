@@ -9,6 +9,7 @@ import { ConnectionDialog, ConnectionDialogResult } from './ConnectionDialog';
 import { ConnectionPicker, SavedConnection, saveConnection } from './components/ConnectionPicker';
 import { TabBar, Tab } from './components/TabBar';
 import { SchemaBrowser } from './components/SchemaBrowser';
+import { FileBrowser } from './components/FileBrowser';
 import { ThemeToggle } from './components/ThemeToggle';
 import { ResultsTable } from './components/ResultsTable';
 import { extractTableNames } from './utils/sqlParser';
@@ -37,6 +38,7 @@ function App() {
   const [showConnectionDialog, setShowConnectionDialog] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [showSchemaBrowser, setShowSchemaBrowser] = useState(true);
+  const [showFileBrowser, setShowFileBrowser] = useState(true);
   const [querySuccess, setQuerySuccess] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
@@ -420,14 +422,22 @@ function App() {
       />
 
       <div className="content">
-        <SchemaBrowser
-          isVisible={showSchemaBrowser}
-          onToggle={() => setShowSchemaBrowser(!showSchemaBrowser)}
-          isConnected={isConnected}
-          onInsertText={handleInsertText}
-          recentTables={recentTables}
-          connectionId={currentConnection?.id}
-        />
+        <div className="sidebar">
+          <SchemaBrowser
+            isVisible={showSchemaBrowser}
+            onToggle={() => setShowSchemaBrowser(!showSchemaBrowser)}
+            isConnected={isConnected}
+            onInsertText={handleInsertText}
+            recentTables={recentTables}
+            connectionId={currentConnection?.id}
+          />
+          <FileBrowser
+            isVisible={showFileBrowser}
+            onToggle={() => setShowFileBrowser(!showFileBrowser)}
+            onFileOpen={handleFileOpen}
+            connectionId={currentConnection?.id}
+          />
+        </div>
 
         <div className="main-panel">
           <div className="editor-container">
