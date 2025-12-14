@@ -2,6 +2,12 @@
 
 ## Recently Completed ✅
 
+### Security & Credential Management (December 2024)
+- **Encrypted Credential Storage**: Uses Electron's safeStorage API for credential encryption
+- **Path Traversal Protection**: All file operations validated against workspace bounds
+- **IPC Hardening**: Context isolation, disabled node integration, whitelisted operations only
+- **Credential Redaction**: Sensitive data removed from logs and error messages
+
 ### Performance & UX (December 2024)
 - **Results Table Virtualization**: Handles 100k+ rows smoothly with @tanstack/react-virtual
 - **Sticky Table Headers**: Column headers stay visible when scrolling
