@@ -3,11 +3,17 @@
 
 import { app, BrowserWindow, ipcMain } from 'electron';
 import * as path from 'path';
-import type { ConnectionConfig, QueryResult, DatabaseConnector } from '../shared/types';
+import type { ConnectionConfig, QueryResult, DatabaseConnector, FileNode, FileTree, SearchOptions, FileSearchResult } from '../shared/types';
 import { BigQueryConnector } from './connectors/bigquery';
+import { FileSystemService } from './services/FileSystemService';
+import { WorkspaceService } from './services/WorkspaceService';
 
 let mainWindow: BrowserWindow | null = null;
 let connector: DatabaseConnector | null = null;
+
+// File system services
+const fileSystemService = new FileSystemService();
+const workspaceService = new WorkspaceService(fileSystemService);
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -89,4 +95,82 @@ ipcMain.handle('get-columns', async (_event, tableName: string) => {
     throw new Error('Not connected to a database');
   }
   return await connector.getColumns(tableName);
+});
+
+// File system IPC handlers
+ipcMain.handle('workspace-select', async () => {
+  return await workspaceService.selectWorkspaceFolder();
+});
+
+ipcMain.handle('workspace-set', async (_event, folderPath: string) => {
+  await workspaceService.setWorkspaceFolder(folderPath);
+});
+
+ipcMain.handle('workspace-get', async () => {
+  return workspaceService.getWorkspaceFolder();
+});
+
+ipcMain.handle('workspace-get-tree', async (_event, dirPath: string) => {
+  return await workspaceService.getDirectoryTree(dirPath);
+});
+
+ipcMain.handle('file-read', async (_event, filePath: string) => {
+  return await fileSystemService.readFile(filePath);
+});
+
+ipcMain.handle('file-write', async (_event, filePath: string, content: string) => {
+  await fileSystemService.writeFile(filePath, content);
+});
+
+ipcMain.handle('file-create', async (_event, filePath: string, content?: string) => {
+  await fileSystemService.createFile(filePath, content || '');
+});
+
+ipcMain.handle('file-delete', async (_event, filePath: string) => {
+  await fileSystemService.deleteFile(filePath);
+});
+
+ipcMain.handle('file-rename', async (_event, oldPath: string, newPath: string) => {
+  await fileSystemService.renameFile(oldPath, newPath);
+});
+
+ipcMain.handle('folder-create', async (_event, folderPath: string) => {
+  await fileSystemService.createFolder(folderPath);
+});
+
+ipcMain.handle('folder-delete', async (_event, folderPath: string) => {
+  await fileSystemService.deleteFolder(folderPath);
+});
+
+ipcMain.handle('folder-rename', async (_event, oldPath: string, newPath: string) => {
+  await fileSystemService.renameFolder(oldPath, newPath);
+});
+
+ipcMain.handle('folder-list', async (_event, dirPath: string) => {
+  return await fileSystemService.listDirectory(dirPath);
+});
+
+ipcMain.handle('file-search', async (_event, query: string, options: SearchOptions) => {
+  return await workspaceService.searchFiles(query, options);
+});
+
+ipcMain.handle('file-save-dialog', async () => {
+  const { dialog } = require('electron');
+  const result = await dialog.showSaveDialog(mainWindow!, {
+    title: 'Save SQL File',
+    defaultPath: 'query.sql',
+    filters: [
+      { name: 'SQL Files', extensions: ['sql'] },
+      { name: 'All Files', extensions: ['*'] }
+    ]
+  });
+  return result.canceled ? null : result.filePath;
+});
+
+ipcMain.handle('recent-files-add', async (_event, filePath: string) => {
+  workspaceService.addRecentFile(filePath);
+});
+
+ipcMain.handle('recent-files-get', async () => {
+  return workspaceService.getRecentFiles();
 });
