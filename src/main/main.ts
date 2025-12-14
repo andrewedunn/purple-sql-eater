@@ -3,7 +3,7 @@
 
 import { app, BrowserWindow, ipcMain } from 'electron';
 import * as path from 'path';
-import type { ConnectionConfig, QueryResult, DatabaseConnector, FileNode, FileTree, SearchOptions, FileSearchResult } from '../shared/types';
+import type { ConnectionConfig, QueryResult, DatabaseConnector, SearchOptions } from '../shared/types';
 import { BigQueryConnector } from './connectors/bigquery';
 import { FileSystemService } from './services/FileSystemService';
 import { WorkspaceService } from './services/WorkspaceService';

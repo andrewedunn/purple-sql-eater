@@ -1,11 +1,11 @@
 // ABOUTME: File watching service that detects external changes to open files.
 // ABOUTME: Uses chokidar to watch files and send IPC notifications when changes are detected.
 
-import * as chokidar from 'chokidar';
+import chokidar, { type FSWatcher } from 'chokidar';
 import { BrowserWindow } from 'electron';
 
 export class FileWatcherService {
-  private watchers: Map<string, chokidar.FSWatcher> = new Map();
+  private watchers: Map<string, FSWatcher> = new Map();
   private window: BrowserWindow | null = null;
 
   setWindow(window: BrowserWindow): void {
@@ -51,7 +51,7 @@ export class FileWatcherService {
   }
 
   unwatchAll(): void {
-    for (const [filePath, watcher] of this.watchers) {
+    for (const watcher of this.watchers.values()) {
       watcher.close();
     }
     this.watchers.clear();

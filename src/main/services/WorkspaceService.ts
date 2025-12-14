@@ -158,7 +158,7 @@ export class WorkspaceService {
     return fileName.startsWith('.');
   }
 
-  async getDirectoryTree(dirPath: string, depth: number = 1): Promise<FileTree> {
+  async getDirectoryTree(dirPath: string): Promise<FileTree> {
     const nodes = await this.fileSystem.listDirectory(dirPath);
     let totalFiles = 0;
     let totalFolders = 0;
