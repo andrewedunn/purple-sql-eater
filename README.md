@@ -9,16 +9,30 @@ A fast, simple SQL client built with Electron for business intelligence analysts
 **What's Working:**
 - ✅ BigQuery connection with service account authentication
 - ✅ Fast schema browser (~3-5s load, instant from cache)
-- ✅ Background column loading with progress indicator
-- ✅ Advanced search (tables, columns, views)
-- ✅ File browser with workspace selection and smart date sorting
-- ✅ Flexible layout (position Schema and File browsers independently)
+  - Background column loading with progress indicator
+  - Advanced search with filter/highlight modes
+  - Recent tables tracking
+  - Keyboard navigation and double-click to insert
+- ✅ File management system
+  - Workspace folder selection
+  - Create/rename/delete files and folders
+  - Content and filename search
+  - Smart date sorting (created/modified)
+  - File watching for external changes
+- ✅ Flexible layout system
+  - Position Schema and File browsers independently (left/right)
+  - Stacked or horizontal modes
+  - Resizable panels
 - ✅ SQL editor with syntax highlighting (Monaco)
-- ✅ Query execution with results table
-- ✅ Multi-tab interface
+- ✅ Query execution with virtualized results table
+  - Handles 100k+ rows smoothly
+  - Column sorting and resizing
+  - Pagination
+- ✅ Multi-tab interface with save/load
+  - Auto-track unsaved changes
+  - Keyboard shortcuts (Cmd+Enter, Cmd+T, Cmd+S)
 - ✅ Export to CSV / Copy to clipboard
-- ✅ Keyboard shortcuts (Cmd+Enter, Cmd+T)
-- ✅ Light/dark theme
+- ✅ Light/dark theme toggle
 
 **Documentation:**
 - 📖 [User Guide](USER_GUIDE.md) - How to use Purple SQL Eater
@@ -93,8 +107,7 @@ This allows the app to support multiple databases without changing core logic.
 See [ROADMAP.md](ROADMAP.md) for detailed feature planning.
 
 **Next Priorities:**
-- [ ] SQL file storage (save queries, organize in folders)
 - [ ] Context-aware autocomplete (schema-aware suggestions)
 - [ ] Query history tracking
 - [ ] Additional database connectors (PostgreSQL, MySQL, Redshift)
-- [ ] Natural language to SQL
+- [ ] AI features (natural language to SQL, auto-documentation)

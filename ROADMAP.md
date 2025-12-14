@@ -16,9 +16,15 @@
   - View/table/materialized view icons (T/V/M/E)
   - Recent tables section with jump-to functionality
   - Alphabetical sorting
+  - Double-click to insert into editor
+  - Keyboard navigation (arrows, enter)
 - **Results Export**:
   - CSV export with proper escaping
   - Copy to clipboard (TSV format)
+- **Results Table Enhancements**:
+  - Column resizing (drag to resize)
+  - Column sorting (click header to sort)
+  - Pagination with configurable rows per page
 - **Polish**:
   - Reduced table padding
   - Better visual design with design system
@@ -28,20 +34,17 @@
   - Independent placement (left, right, hidden)
   - Stacked or horizontal modes when both on same side
   - Resizable browsers with direction-aware handles
+- **SQL File Storage**:
+  - Save/Save As for query tabs
+  - File tree sidebar with workspace selection
+  - Folder navigation and browsing
+  - Create/rename/delete files and folders
+  - Smart date sorting (created/modified with cycling)
+  - File content search with match preview
+  - File watching for external changes with reload option
+  - Tab management with unsaved changes warnings
 
 ## Up Next (High Priority)
-
-### SQL File Storage
-**Why**: Critical workflow need for saving and organizing queries
-**Status**: Partially implemented - file browsing complete, file operations in progress
-**Features**:
-- [ ] Save query tabs to .sql files
-- [x] File tree sidebar with workspace selection
-- [x] Folder navigation and browsing
-- [x] Smart date sorting (created/modified with cycling)
-- [ ] File content search (currently filters by filename only)
-- [ ] Auto-save drafts
-- [ ] Create/rename/delete operations
 
 ### Context-Aware Autocomplete
 **Why**: Major productivity boost for daily use
@@ -77,12 +80,12 @@
 - [ ] Query optimization suggestions
 - [ ] Schema change detection
 
-### Results Table Enhancements
+### Additional Results Table Features
 **Status**: Nice-to-have
-- [ ] Column resizing (drag to resize)
-- [ ] Column sorting (click header to sort)
 - [ ] Cell formatting (numbers, dates)
 - [ ] Column hiding/reordering
+- [ ] Export to Excel/Parquet
+- [ ] Charting/visualization
 
 ## Completed Foundation ✅
 
