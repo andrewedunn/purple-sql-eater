@@ -48,6 +48,7 @@ function App() {
     const stored = localStorage.getItem(RECENT_TABLES_KEY);
     return stored ? JSON.parse(stored) : [];
   });
+  const [changedFiles, setChangedFiles] = useState<Set<string>>(new Set());
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
@@ -370,6 +371,76 @@ function App() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [tabs]);
 
+  // Watch all open tab files for external changes
+  useEffect(() => {
+    const filePaths = tabs
+      .filter((tab) => tab.filePath && !tab.isUntitled)
+      .map((tab) => tab.filePath!);
+
+    // Watch all file paths
+    filePaths.forEach((filePath) => {
+      window.electron.fileWatch(filePath);
+    });
+
+    // Cleanup: unwatch files that are no longer open
+    return () => {
+      filePaths.forEach((filePath) => {
+        window.electron.fileUnwatch(filePath);
+      });
+    };
+  }, [tabs]);
+
+  // Listen for file-changed events from main process
+  useEffect(() => {
+    const handleFileChanged = (_event: any, filePath: string) => {
+      // Add to changed files set
+      setChangedFiles((prev) => new Set(prev).add(filePath));
+    };
+
+    const handleFileDeleted = (_event: any, filePath: string) => {
+      const tab = tabs.find((t) => t.filePath === filePath);
+      if (tab) {
+        const confirmed = window.confirm(
+          `"${tab.title}" was deleted externally. Close this tab?`
+        );
+        if (confirmed) {
+          handleCloseTab(tab.id);
+        }
+      }
+    };
+
+    if (window.electron.ipcRenderer) {
+      window.electron.ipcRenderer.on('file-changed', handleFileChanged);
+      window.electron.ipcRenderer.on('file-deleted', handleFileDeleted);
+
+      return () => {
+        window.electron.ipcRenderer?.removeListener('file-changed', handleFileChanged);
+        window.electron.ipcRenderer?.removeListener('file-deleted', handleFileDeleted);
+      };
+    }
+  }, [tabs]);
+
+  // Handle file reload
+  const handleReloadFile = async (filePath: string) => {
+    try {
+      const content = await window.electron.fileRead(filePath);
+      setTabs(
+        tabs.map((tab) =>
+          tab.filePath === filePath
+            ? { ...tab, sql: content, isDirty: false }
+            : tab
+        )
+      );
+      setChangedFiles((prev) => {
+        const next = new Set(prev);
+        next.delete(filePath);
+        return next;
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reload file');
+    }
+  };
+
   return (
     <div className="app">
       {showConnectionDialog && (
@@ -441,6 +512,29 @@ function App() {
 
         <div className="main-panel">
           <div className="editor-container">
+            {activeTab.filePath && changedFiles.has(activeTab.filePath) && (
+              <div className="file-changed-banner">
+                <span>This file was changed externally.</span>
+                <button
+                  onClick={() => handleReloadFile(activeTab.filePath!)}
+                  className="btn-reload"
+                >
+                  Reload
+                </button>
+                <button
+                  onClick={() => {
+                    setChangedFiles((prev) => {
+                      const next = new Set(prev);
+                      next.delete(activeTab.filePath!);
+                      return next;
+                    });
+                  }}
+                  className="btn-dismiss"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
             <Editor
               height="100%"
               defaultLanguage="sql"

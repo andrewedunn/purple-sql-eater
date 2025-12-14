@@ -72,6 +72,12 @@ contextBridge.exposeInMainWorld('electron', {
   recentFilesGet: (): Promise<string[]> =>
     ipcRenderer.invoke('recent-files-get'),
 
+  fileWatch: (filePath: string): Promise<void> =>
+    ipcRenderer.invoke('file-watch', filePath),
+
+  fileUnwatch: (filePath: string): Promise<void> =>
+    ipcRenderer.invoke('file-unwatch', filePath),
+
   ipcRenderer: {
     on: (channel: string, func: (...args: any[]) => void) => {
       ipcRenderer.on(channel, func);
@@ -109,6 +115,8 @@ declare global {
       fileSaveDialog: () => Promise<string | null>;
       recentFilesAdd: (filePath: string) => Promise<void>;
       recentFilesGet: () => Promise<string[]>;
+      fileWatch: (filePath: string) => Promise<void>;
+      fileUnwatch: (filePath: string) => Promise<void>;
 
       ipcRenderer?: {
         on: (channel: string, func: (...args: any[]) => void) => void;

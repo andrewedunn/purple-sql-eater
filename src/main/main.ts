@@ -7,6 +7,7 @@ import type { ConnectionConfig, QueryResult, DatabaseConnector, FileNode, FileTr
 import { BigQueryConnector } from './connectors/bigquery';
 import { FileSystemService } from './services/FileSystemService';
 import { WorkspaceService } from './services/WorkspaceService';
+import { FileWatcherService } from './services/FileWatcherService';
 
 let mainWindow: BrowserWindow | null = null;
 let connector: DatabaseConnector | null = null;
@@ -14,6 +15,7 @@ let connector: DatabaseConnector | null = null;
 // File system services
 const fileSystemService = new FileSystemService();
 const workspaceService = new WorkspaceService(fileSystemService);
+const fileWatcherService = new FileWatcherService();
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -34,8 +36,11 @@ function createWindow() {
   }
 
   mainWindow.on('closed', () => {
+    fileWatcherService.unwatchAll();
     mainWindow = null;
   });
+
+  fileWatcherService.setWindow(mainWindow);
 }
 
 app.whenReady().then(createWindow);
@@ -173,4 +178,13 @@ ipcMain.handle('recent-files-add', async (_event, filePath: string) => {
 
 ipcMain.handle('recent-files-get', async () => {
   return workspaceService.getRecentFiles();
+});
+
+// File watching IPC handlers
+ipcMain.handle('file-watch', async (_event, filePath: string) => {
+  fileWatcherService.watchFile(filePath);
+});
+
+ipcMain.handle('file-unwatch', async (_event, filePath: string) => {
+  fileWatcherService.unwatchFile(filePath);
 });
