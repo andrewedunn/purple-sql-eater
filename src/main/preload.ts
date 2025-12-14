@@ -2,7 +2,7 @@
 // ABOUTME: Acts as a security bridge between Electron main and renderer processes.
 
 import { contextBridge, ipcRenderer } from 'electron';
-import type { ConnectionConfig, QueryResult, Schema } from '../shared/types';
+import type { ConnectionConfig, QueryResult, Schema, Column } from '../shared/types';
 
 contextBridge.exposeInMainWorld('electron', {
   executeQuery: (sql: string): Promise<QueryResult> =>
@@ -16,6 +16,18 @@ contextBridge.exposeInMainWorld('electron', {
 
   getSchema: (): Promise<Schema> =>
     ipcRenderer.invoke('get-schema'),
+
+  getColumns: (tableName: string): Promise<Column[]> =>
+    ipcRenderer.invoke('get-columns', tableName),
+
+  ipcRenderer: {
+    on: (channel: string, func: (...args: any[]) => void) => {
+      ipcRenderer.on(channel, func);
+    },
+    removeListener: (channel: string, func: (...args: any[]) => void) => {
+      ipcRenderer.removeListener(channel, func);
+    },
+  },
 });
 
 declare global {
@@ -25,6 +37,11 @@ declare global {
       connect: (config: ConnectionConfig) => Promise<void>;
       disconnect: () => Promise<void>;
       getSchema: () => Promise<Schema>;
+      getColumns: (tableName: string) => Promise<Column[]>;
+      ipcRenderer?: {
+        on: (channel: string, func: (...args: any[]) => void) => void;
+        removeListener: (channel: string, func: (...args: any[]) => void) => void;
+      };
     };
   }
 }

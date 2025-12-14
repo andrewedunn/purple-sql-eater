@@ -3,11 +3,11 @@
 
 import { app, BrowserWindow, ipcMain } from 'electron';
 import * as path from 'path';
-import type { ConnectionConfig, QueryResult } from '../shared/types';
+import type { ConnectionConfig, QueryResult, DatabaseConnector } from '../shared/types';
 import { BigQueryConnector } from './connectors/bigquery';
 
 let mainWindow: BrowserWindow | null = null;
-let connector: BigQueryConnector | null = null;
+let connector: DatabaseConnector | null = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -69,9 +69,24 @@ ipcMain.handle('execute-query', async (_event, sql: string): Promise<QueryResult
   return await connector.query(sql);
 });
 
-ipcMain.handle('get-schema', async () => {
+ipcMain.handle('get-schema', async (event) => {
   if (!connector) {
     throw new Error('Not connected to a database');
   }
+
+  // Stream progress back to renderer
+  if (connector instanceof BigQueryConnector) {
+    return await connector.getSchemaWithProgress((current, total) => {
+      event.sender.send('schema-progress', { current, total });
+    });
+  }
+
   return await connector.getSchema();
+});
+
+ipcMain.handle('get-columns', async (_event, tableName: string) => {
+  if (!connector) {
+    throw new Error('Not connected to a database');
+  }
+  return await connector.getColumns(tableName);
 });

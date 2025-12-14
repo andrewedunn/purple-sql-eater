@@ -1,8 +1,9 @@
 // ABOUTME: Main application component with tabbed interface, connection management, and schema browser.
 // ABOUTME: Manages global state for connections, tabs, and query execution with keyboard shortcuts.
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
+import type * as Monaco from 'monaco-editor';
 import type { QueryResult, ConnectionConfig } from '../shared/types';
 import { ConnectionDialog, ConnectionDialogResult } from './ConnectionDialog';
 import { ConnectionPicker, SavedConnection, saveConnection } from './components/ConnectionPicker';
@@ -10,10 +11,12 @@ import { TabBar, Tab } from './components/TabBar';
 import { SchemaBrowser } from './components/SchemaBrowser';
 import { ThemeToggle } from './components/ThemeToggle';
 import { ResultsTable } from './components/ResultsTable';
+import { extractTableNames } from './utils/sqlParser';
 import './design-system.css';
 import './App-new.css';
 
 const THEME_STORAGE_KEY = 'purple-sql-eater-theme';
+const RECENT_TABLES_KEY = 'purple-sql-eater-recent-tables';
 
 function App() {
   const [tabs, setTabs] = useState<Tab[]>([
@@ -37,6 +40,11 @@ function App() {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
     return (stored as 'light' | 'dark') || 'light';
   });
+  const [recentTables, setRecentTables] = useState<string[]>(() => {
+    const stored = localStorage.getItem(RECENT_TABLES_KEY);
+    return stored ? JSON.parse(stored) : [];
+  });
+  const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
@@ -44,6 +52,10 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem(RECENT_TABLES_KEY, JSON.stringify(recentTables));
+  }, [recentTables]);
 
   const toggleTheme = () => {
     setTheme(theme === 'light' ? 'dark' : 'light');
@@ -124,6 +136,15 @@ function App() {
       setTabs(tabs.map((tab) =>
         tab.id === activeTabId ? { ...tab, results: result } : tab
       ));
+
+      // Track recently queried tables
+      const tableNames = extractTableNames(activeTab.sql);
+      if (tableNames.length > 0) {
+        setRecentTables((prev) => {
+          const updated = [...tableNames, ...prev.filter(t => !tableNames.includes(t))];
+          return updated.slice(0, 10); // Keep only the 10 most recent
+        });
+      }
 
       setQuerySuccess(true);
       setTimeout(() => setQuerySuccess(false), 400);
@@ -209,6 +230,24 @@ function App() {
     navigator.clipboard.writeText(tsvContent);
   };
 
+  const handleInsertText = (text: string) => {
+    if (!editorRef.current) return;
+
+    const editor = editorRef.current;
+    const selection = editor.getSelection();
+    if (!selection) return;
+
+    editor.executeEdits('schema-browser', [
+      {
+        range: selection,
+        text,
+        forceMoveMarkers: true,
+      },
+    ]);
+
+    editor.focus();
+  };
+
   return (
     <div className="app">
       {showConnectionDialog && (
@@ -265,6 +304,9 @@ function App() {
           isVisible={showSchemaBrowser}
           onToggle={() => setShowSchemaBrowser(!showSchemaBrowser)}
           isConnected={isConnected}
+          onInsertText={handleInsertText}
+          recentTables={recentTables}
+          connectionId={currentConnection?.id}
         />
 
         <div className="main-panel">
@@ -275,6 +317,9 @@ function App() {
               value={activeTab.sql}
               onChange={(value) => handleSqlChange(value || '')}
               theme={theme === 'dark' ? 'vs-dark' : 'vs'}
+              onMount={(editor) => {
+                editorRef.current = editor;
+              }}
               options={{
                 minimap: { enabled: false },
                 fontSize: 14,

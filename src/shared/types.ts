@@ -19,7 +19,9 @@ export interface Schema {
 export interface Table {
   name: string;
   schema?: string;
+  type?: 'TABLE' | 'VIEW' | 'EXTERNAL' | 'MATERIALIZED_VIEW';
   columns: Column[];
+  columnCount?: number;
 }
 
 export interface Column {

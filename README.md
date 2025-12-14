@@ -1,10 +1,26 @@
 # Purple SQL Eater
 
-A simple, fast SQL client built with Electron for business intelligence analysts.
+A fast, simple SQL client built with Electron for business intelligence analysts and data professionals.
 
 ## Current Status
 
-Early development - basic structure in place. BigQuery connector implemented but not yet tested with real credentials.
+**Early Development** - Core features working and tested with BigQuery.
+
+**What's Working:**
+- ✅ BigQuery connection with service account authentication
+- ✅ Fast schema browser (~3-5s load, instant from cache)
+- ✅ Background column loading with progress indicator
+- ✅ Advanced search (tables, columns, views)
+- ✅ SQL editor with syntax highlighting (Monaco)
+- ✅ Query execution with results table
+- ✅ Multi-tab interface
+- ✅ Export to CSV / Copy to clipboard
+- ✅ Keyboard shortcuts (Cmd+Enter, Cmd+T)
+- ✅ Light/dark theme
+
+**Documentation:**
+- 📖 [User Guide](USER_GUIDE.md) - How to use Purple SQL Eater
+- 🛠️ [Developer Setup](#development-setup) - Below
 
 ## Project Structure
 
@@ -70,11 +86,13 @@ interface DatabaseConnector {
 
 This allows the app to support multiple databases without changing core logic.
 
-## Next Steps
+## Roadmap
 
-- [ ] Test BigQuery connection with real credentials
-- [ ] Add connection UI for BigQuery configuration
-- [ ] Implement schema browser
-- [ ] Add keyboard shortcuts for query execution
-- [ ] Implement CSV export
-- [ ] Add clipboard support
+See [ROADMAP.md](ROADMAP.md) for detailed feature planning.
+
+**Next Priorities:**
+- [ ] SQL file storage (save queries, organize in folders)
+- [ ] Context-aware autocomplete (schema-aware suggestions)
+- [ ] Query history tracking
+- [ ] Additional database connectors (PostgreSQL, MySQL, Redshift)
+- [ ] Natural language to SQL

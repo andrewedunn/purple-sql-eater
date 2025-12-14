@@ -1,117 +1,117 @@
 # Purple SQL Eater - Development Roadmap
 
-## Critical Issues (Performance & UX Blockers)
+## Recently Completed ✅
 
-### 1. Results Table Virtualization
-**Problem**: 6K+ rows freeze the UI
-**Solution**: Implement virtual scrolling (render only visible rows)
-**Priority**: CRITICAL
-**Status**: Not started
+### Performance & UX (December 2024)
+- **Results Table Virtualization**: Handles 100k+ rows smoothly with @tanstack/react-virtual
+- **Sticky Table Headers**: Column headers stay visible when scrolling
+- **Schema Loading Optimizations**:
+  - Parallel BigQuery dataset fetching (~30x faster: 120s → 3-5s)
+  - localStorage caching (instant subsequent loads)
+  - Background refresh strategy
+  - Progress indicators for schema and column loading
+- **Advanced Schema Browser**:
+  - Search tables, columns, schemas with filter/highlight modes
+  - Background column loading (batched for performance)
+  - View/table/materialized view icons (T/V/M/E)
+  - Recent tables section with jump-to functionality
+  - Alphabetical sorting
+- **Results Export**:
+  - CSV export with proper escaping
+  - Copy to clipboard (TSV format)
+- **Polish**:
+  - Reduced table padding
+  - Better visual design with design system
+  - Light/dark theme toggle
 
-### 2. Sticky Table Headers
-**Problem**: Can't see column names when scrolling results
-**Solution**: CSS sticky positioning for thead
-**Priority**: CRITICAL
-**Status**: Not started
+## Up Next (High Priority)
 
-### 3. Schema Loading Indicator
-**Problem**: Long schema load with no feedback
-**Solution**: Show loading state in sidebar
-**Priority**: HIGH
-**Status**: Not started
+### SQL File Storage
+**Why**: Critical workflow need for saving and organizing queries
+**Features**:
+- [ ] Save query tabs to .sql files
+- [ ] Folder-based organization
+- [ ] Search across saved queries
+- [ ] File tree sidebar
+- [ ] Auto-save drafts
 
-### 4. Schema Caching Strategy
-**Problem**: Schema loads from scratch every time
-**Solution**: Cache in localStorage with TTL, refresh in background
-**Priority**: HIGH
-**Status**: Not started
+### Context-Aware Autocomplete
+**Why**: Major productivity boost for daily use
+**Features**:
+- [ ] Schema-aware completions (tables, columns)
+- [ ] SQL keyword suggestions
+- [ ] Function signatures
+- [ ] Recently used tables/columns prioritized
+- [ ] Works with Monaco editor's IntelliSense
 
-## High Priority Features
+### Query History
+**Why**: Common use case - re-running recent queries
+**Features**:
+- [ ] Track all executed queries
+- [ ] Timestamp + connection info
+- [ ] Search history
+- [ ] Re-run from history
+- [ ] Star favorites
 
-### 5. Results Table Improvements
-- [ ] Reduce padding (too much whitespace)
+## Future Features
+
+### Additional Database Connectors
+**Status**: Planned
+- [ ] PostgreSQL
+- [ ] MySQL
+- [ ] Amazon Redshift
+- [ ] Snowflake
+
+### Advanced AI Features
+**Status**: Experimental
+- [ ] Auto-documentation (comment generation on save)
+- [ ] Natural language to SQL
+- [ ] Query optimization suggestions
+- [ ] Schema change detection
+
+### Results Table Enhancements
+**Status**: Nice-to-have
 - [ ] Column resizing (drag to resize)
 - [ ] Column sorting (click header to sort)
-- [ ] Better visual design
-- [ ] Alternating row colors for readability
-**Priority**: HIGH
-**Status**: Not started
+- [ ] Cell formatting (numbers, dates)
+- [ ] Column hiding/reordering
 
-### 6. CSV Export
-**Problem**: Can't export results for sharing
-**Solution**: Export button → download CSV file
-**Priority**: HIGH
-**Status**: Not started
+## Completed Foundation ✅
 
-### 7. Copy to Clipboard
-**Problem**: Can't copy results to paste elsewhere
-**Solution**: Copy button → clipboard with tab-delimited format
-**Priority**: HIGH
-**Status**: Not started
-
-## Medium Priority Features
-
-### 8. SQL File Management
-- [ ] Save SQL to files
-- [ ] Folder organization
-- [ ] Search across saved queries
-**Priority**: MEDIUM
-**Status**: Not started
-
-### 9. Query History
-- [ ] Track executed queries
-- [ ] Re-run from history
-**Priority**: MEDIUM
-**Status**: Not started
-
-### 10. AI Features
-- [ ] Autocomplete (context-aware, knows schema)
-- [ ] Auto-documentation (add comments when saving)
-- [ ] Natural language to SQL
-**Priority**: MEDIUM
-**Status**: Not started
-
-## Completed ✓
-
-- [x] Git repository initialization
+**Core Infrastructure:**
 - [x] Electron + React + TypeScript setup
 - [x] Monaco Editor integration
-- [x] BigQuery connector with abstraction pattern
-- [x] Connection management (save/load connections)
-- [x] Tabbed interface
-- [x] Schema browser with search
-- [x] Keyboard shortcuts (Cmd+Enter, Cmd+T)
-- [x] Design system (light + dark themes)
-- [x] Theme toggle with persistence
+- [x] Database connector abstraction pattern
+- [x] IPC architecture (main ↔ renderer)
+- [x] Design system with CSS variables
+- [x] Light/dark theme support
 
-## Implementation Order Recommendation
+**BigQuery Support:**
+- [x] Service account authentication
+- [x] Query execution
+- [x] Schema browsing (parallel fetch)
+- [x] Column metadata loading
+- [x] View/table type detection
 
-**Phase 1: Fix Performance Issues (Session 1)**
-1. Results table virtualization
-2. Sticky headers
-3. Schema loading indicator
+**UI Components:**
+- [x] Connection management dialog
+- [x] Tabbed query interface
+- [x] Schema browser with tree view
+- [x] Results table with virtualization
+- [x] Theme toggle
+- [x] Keyboard shortcuts
 
-**Phase 2: Results Table Polish (Session 2)**
-4. Reduce padding, improve design
-5. Column resizing
-6. Column sorting
+**Performance:**
+- [x] Results virtualization (100k+ rows)
+- [x] Schema caching (localStorage)
+- [x] Parallel API requests
+- [x] Background column loading
+- [x] Progress indicators
 
-**Phase 3: Export Features (Session 3)**
-7. CSV export
-8. Clipboard support
+## Implementation Philosophy
 
-**Phase 4: Schema Optimization (Session 4)**
-9. Schema caching with TTL
-10. Background refresh strategy
-
-**Phase 5: Power User Features (Future)**
-11. SQL file management
-12. Query history
-13. AI features
-
-## Notes
-
-- Performance issues block real usage - must fix first
-- Results table is the primary UI - make it excellent
-- Export features are table stakes for BI work
-- AI features are differentiators but can wait
+1. **Performance First**: Never compromise on speed
+2. **Simple Over Clever**: Readable, maintainable code
+3. **Progressive Enhancement**: Core features work, then add polish
+4. **User Feedback**: Loading states, progress, errors
+5. **Keyboard-Friendly**: Power users love shortcuts

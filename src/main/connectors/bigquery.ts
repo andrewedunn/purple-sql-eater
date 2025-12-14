@@ -117,33 +117,87 @@ export class BigQueryConnector implements DatabaseConnector {
     return { tables };
   }
 
+  async getSchemaWithProgress(
+    onProgress: (current: number, total: number) => void
+  ): Promise<Schema> {
+    if (!this.client || !this.projectId) {
+      throw new Error('Not connected to BigQuery');
+    }
+
+    console.time('BigQuery: Get datasets');
+    const [datasets] = await this.client.getDatasets();
+    console.timeEnd('BigQuery: Get datasets');
+    console.log(`Found ${datasets.length} datasets`);
+
+    const tables: Table[] = [];
+    let completed = 0;
+    const total = datasets.length;
+
+    // Fetch datasets in parallel with progress updates
+    console.time('BigQuery: Get all tables (parallel with progress)');
+    await Promise.all(
+      datasets.map(async (dataset) => {
+        try {
+          const [datasetTables] = await dataset.getTables();
+          console.log(`Dataset ${dataset.id}: ${datasetTables.length} tables`);
+
+          const datasetTableObjects = datasetTables.map(table => ({
+            name: table.id!,
+            schema: dataset.id!,
+            type: (table.metadata as any)?.type,
+            columns: [],
+          }));
+
+          tables.push(...datasetTableObjects);
+          completed++;
+          onProgress(completed, total);
+        } catch (err) {
+          console.error(`Failed to fetch tables for dataset ${dataset.id}:`, err);
+          completed++;
+          onProgress(completed, total);
+        }
+      })
+    );
+    console.timeEnd('BigQuery: Get all tables (parallel with progress)');
+
+    console.log(`Total tables: ${tables.length}`);
+    return { tables };
+  }
+
   async getTables(): Promise<Table[]> {
     if (!this.client || !this.projectId) {
       throw new Error('Not connected to BigQuery');
     }
 
+    console.time('BigQuery: Get datasets');
     const [datasets] = await this.client.getDatasets();
-    const tables: Table[] = [];
+    console.timeEnd('BigQuery: Get datasets');
+    console.log(`Found ${datasets.length} datasets`);
 
-    for (const dataset of datasets) {
-      const [datasetTables] = await dataset.getTables();
+    // Fetch all datasets' tables in parallel
+    console.time('BigQuery: Get all tables (parallel)');
+    const tablePromises = datasets.map(async (dataset) => {
+      try {
+        const [datasetTables] = await dataset.getTables();
+        console.log(`Dataset ${dataset.id}: ${datasetTables.length} tables`);
 
-      for (const table of datasetTables) {
-        const [metadata] = await table.getMetadata();
-        const columns: Column[] = metadata.schema.fields.map((field: any) => ({
-          name: field.name,
-          type: field.type,
-          nullable: field.mode !== 'REQUIRED',
-        }));
-
-        tables.push({
+        return datasetTables.map(table => ({
           name: table.id!,
           schema: dataset.id!,
-          columns,
-        });
+          type: (table.metadata as any)?.type,
+          columns: [],
+        }));
+      } catch (err) {
+        console.error(`Failed to fetch tables for dataset ${dataset.id}:`, err);
+        return [];
       }
-    }
+    });
 
+    const tableArrays = await Promise.all(tablePromises);
+    const tables = tableArrays.flat();
+    console.timeEnd('BigQuery: Get all tables (parallel)');
+
+    console.log(`Total tables: ${tables.length}`);
     return tables;
   }
 
@@ -159,12 +213,19 @@ export class BigQueryConnector implements DatabaseConnector {
 
     const dataset = this.client.dataset(datasetId);
     const table = dataset.table(tableId);
-    const [metadata] = await table.getMetadata();
 
-    return metadata.schema.fields.map((field: any) => ({
-      name: field.name,
-      type: field.type,
-      nullable: field.mode !== 'REQUIRED',
-    }));
+    try {
+      const [metadata] = await table.getMetadata();
+
+      return metadata.schema?.fields?.map((field: any) => ({
+        name: field.name,
+        type: field.type,
+        nullable: field.mode !== 'REQUIRED',
+      })) || [];
+    } catch (err) {
+      // If metadata fetch fails (e.g., table deleted), return empty array
+      console.error(`Failed to fetch columns for ${tableName}:`, err);
+      return [];
+    }
   }
 }
