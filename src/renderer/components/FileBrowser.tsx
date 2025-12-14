@@ -2,7 +2,7 @@
 // ABOUTME: Displays file tree with expand/collapse, handles file operations, and workspace selection.
 
 import { useState, useEffect, useMemo } from 'react';
-import type { FileNode, FileTree } from '../../shared/types';
+import type { FileNode, FileTree, FileSearchResult } from '../../shared/types';
 import './FileBrowser.css';
 
 interface FileBrowserProps {
@@ -24,6 +24,8 @@ export function FileBrowser({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchMode, setSearchMode] = useState<'filename' | 'content'>('filename');
+  const [contentSearchResults, setContentSearchResults] = useState<FileSearchResult[]>([]);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -242,7 +244,7 @@ export function FileBrowser({
 
   // Auto-expand folders when searching
   useEffect(() => {
-    if (searchQuery.trim() && fileTree) {
+    if (searchQuery.trim() && fileTree && searchMode === 'filename') {
       const allFolders = new Set<string>();
       const collectFolders = (nodes: FileNode[]) => {
         nodes.forEach((node) => {
@@ -257,7 +259,67 @@ export function FileBrowser({
       collectFolders(filteredNodes);
       setExpandedFolders(allFolders);
     }
-  }, [searchQuery, filteredNodes]);
+  }, [searchQuery, filteredNodes, searchMode]);
+
+  // Perform content search when in content mode
+  useEffect(() => {
+    if (searchMode === 'content' && searchQuery.trim() && workspace) {
+      const searchContent = async () => {
+        setIsLoading(true);
+        try {
+          const results = await window.electron.fileSearch(searchQuery, {
+            searchContent: true,
+            searchFilenames: false,
+            caseSensitive: false,
+            maxResults: 100,
+          });
+          setContentSearchResults(results);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Search failed');
+          setContentSearchResults([]);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      const debounce = setTimeout(searchContent, 300);
+      return () => clearTimeout(debounce);
+    } else if (searchMode === 'content' && !searchQuery.trim()) {
+      setContentSearchResults([]);
+    }
+  }, [searchQuery, searchMode, workspace]);
+
+  const renderContentSearchResult = (result: FileSearchResult): JSX.Element => {
+    const fileName = result.path.split('/').pop() || result.name;
+    const extension = fileName.includes('.') ? `.${fileName.split('.').pop()}` : '';
+    const isSql = extension === '.sql';
+
+    return (
+      <div key={result.path} className="search-result-item">
+        <div
+          className="search-result-file"
+          onClick={() => handleFileClick(result.path)}
+        >
+          <span className={`file-icon ${isSql ? 'sql' : ''}`}>📄</span>
+          <span className="file-name">{fileName}</span>
+          <span className="file-score">{result.matches.length} match{result.matches.length !== 1 ? 'es' : ''}</span>
+        </div>
+        <div className="search-result-matches">
+          {result.matches.slice(0, 3).map((match, idx) => (
+            <div key={idx} className="search-match">
+              <span className="match-line">Line {match.lineNumber}:</span>
+              <span className="match-text">{match.line.trim()}</span>
+            </div>
+          ))}
+          {result.matches.length > 3 && (
+            <div className="search-match-more">
+              +{result.matches.length - 3} more match{result.matches.length - 3 !== 1 ? 'es' : ''}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   const renderFileNode = (node: FileNode, depth: number = 0): JSX.Element => {
     const isExpanded = expandedFolders.has(node.path);
@@ -340,29 +402,57 @@ export function FileBrowser({
             </div>
           ) : (
             <>
-              <div className="search-box">
-                <input
-                  type="text"
-                  placeholder="Search files..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="search-input"
-                />
-                {searchQuery && (
+              <div className="search-container">
+                <div className="search-box">
+                  <input
+                    type="text"
+                    placeholder={searchMode === 'filename' ? 'Search files...' : 'Search content...'}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="search-input"
+                  />
+                  {searchQuery && (
+                    <button
+                      className="search-clear"
+                      onClick={() => setSearchQuery('')}
+                      title="Clear search"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                <div className="search-mode-toggle">
                   <button
-                    className="search-clear"
-                    onClick={() => setSearchQuery('')}
-                    title="Clear search"
+                    className={searchMode === 'filename' ? 'active' : ''}
+                    onClick={() => setSearchMode('filename')}
+                    title="Search by filename"
                   >
-                    ×
+                    Name
                   </button>
-                )}
+                  <button
+                    className={searchMode === 'content' ? 'active' : ''}
+                    onClick={() => setSearchMode('content')}
+                    title="Search file contents"
+                  >
+                    Content
+                  </button>
+                </div>
               </div>
 
               {error && <div className="error-message">{error}</div>}
 
               {isLoading ? (
-                <div className="loading">Loading files...</div>
+                <div className="loading">
+                  {searchMode === 'content' ? 'Searching content...' : 'Loading files...'}
+                </div>
+              ) : searchMode === 'content' && searchQuery ? (
+                <div className="search-results">
+                  {contentSearchResults.length === 0 ? (
+                    <div className="empty-results">No matches found</div>
+                  ) : (
+                    contentSearchResults.map(renderContentSearchResult)
+                  )}
+                </div>
               ) : (
                 <div
                   className="file-tree"
