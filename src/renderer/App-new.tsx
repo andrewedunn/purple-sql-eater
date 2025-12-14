@@ -18,6 +18,16 @@ import './App-new.css';
 
 const THEME_STORAGE_KEY = 'purple-sql-eater-theme';
 const RECENT_TABLES_KEY = 'purple-sql-eater-recent-tables';
+const LAYOUT_STORAGE_KEY = 'purple-sql-eater-layout';
+
+type BrowserPosition = 'left' | 'right';
+type LayoutMode = 'stacked' | 'horizontal';
+
+interface LayoutConfig {
+  schemaPosition: BrowserPosition;
+  filePosition: BrowserPosition;
+  layoutMode: LayoutMode;
+}
 
 function App() {
   const [tabs, setTabs] = useState<Tab[]>([
@@ -49,6 +59,26 @@ function App() {
     return stored ? JSON.parse(stored) : [];
   });
   const [changedFiles, setChangedFiles] = useState<Set<string>>(new Set());
+  const [layoutConfig, setLayoutConfig] = useState<LayoutConfig>(() => {
+    const stored = localStorage.getItem(LAYOUT_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : {
+      schemaPosition: 'left',
+      filePosition: 'left',
+      layoutMode: 'stacked',
+    };
+  });
+  const [schemaBrowserWidth, setSchemaBrowserWidth] = useState(300);
+  const [fileBrowserWidth, setFileBrowserWidth] = useState(300);
+  const [stackedSidebarWidth, setStackedSidebarWidth] = useState(300);
+  const [browserSplitRatio, setBrowserSplitRatio] = useState(0.5);
+  const [isResizingSchema, setIsResizingSchema] = useState(false);
+  const [isResizingFile, setIsResizingFile] = useState(false);
+  const [isResizingStacked, setIsResizingStacked] = useState(false);
+  const [isResizingBrowsers, setIsResizingBrowsers] = useState(false);
+  const resizeStartX = useRef(0);
+  const resizeStartY = useRef(0);
+  const resizeStartWidth = useRef(0);
+  const resizeStartRatio = useRef(0.5);
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
@@ -61,6 +91,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem(RECENT_TABLES_KEY, JSON.stringify(recentTables));
   }, [recentTables]);
+
+  useEffect(() => {
+    localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layoutConfig));
+  }, [layoutConfig]);
 
   const toggleTheme = () => {
     setTheme(theme === 'light' ? 'dark' : 'light');
@@ -357,6 +391,150 @@ function App() {
     }
   };
 
+  // Layout handlers
+  const handleSchemaPositionChange = (position: BrowserPosition) => {
+    setLayoutConfig(prev => ({ ...prev, schemaPosition: position }));
+  };
+
+  const handleFilePositionChange = (position: BrowserPosition) => {
+    setLayoutConfig(prev => ({ ...prev, filePosition: position }));
+  };
+
+  const handleLayoutModeChange = (mode: LayoutMode) => {
+    setLayoutConfig(prev => ({ ...prev, layoutMode: mode }));
+  };
+
+  // Determine if both browsers are on the same side
+  const bothOnSameSide = layoutConfig.schemaPosition === layoutConfig.filePosition;
+  const showLayoutModeOption = bothOnSameSide;
+
+  // Browser resize handlers
+  const handleSchemaBrowserResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingSchema(true);
+    resizeStartX.current = e.clientX;
+    resizeStartWidth.current = schemaBrowserWidth;
+  };
+
+  const handleFileBrowserResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingFile(true);
+    resizeStartX.current = e.clientX;
+    resizeStartWidth.current = fileBrowserWidth;
+  };
+
+  const handleStackedSidebarResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingStacked(true);
+    resizeStartX.current = e.clientX;
+    resizeStartWidth.current = stackedSidebarWidth;
+  };
+
+  const handleBrowsersResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingBrowsers(true);
+    resizeStartY.current = e.clientY;
+    resizeStartRatio.current = browserSplitRatio;
+  };
+
+  useEffect(() => {
+    if (!isResizingSchema) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const delta = e.clientX - resizeStartX.current;
+      const directedDelta = layoutConfig.schemaPosition === 'right' ? -delta : delta;
+      const newWidth = Math.max(200, Math.min(600, resizeStartWidth.current + directedDelta));
+      setSchemaBrowserWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingSchema(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingSchema, layoutConfig.schemaPosition]);
+
+  useEffect(() => {
+    if (!isResizingFile) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const delta = e.clientX - resizeStartX.current;
+      const directedDelta = layoutConfig.filePosition === 'right' ? -delta : delta;
+      const newWidth = Math.max(200, Math.min(600, resizeStartWidth.current + directedDelta));
+      setFileBrowserWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingFile(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingFile, layoutConfig.filePosition]);
+
+  useEffect(() => {
+    if (!isResizingStacked) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const delta = e.clientX - resizeStartX.current;
+      // Stacked sidebar is only used when both browsers are on the same side
+      const isOnRight = layoutConfig.schemaPosition === 'right';
+      const directedDelta = isOnRight ? -delta : delta;
+      const newWidth = Math.max(200, Math.min(600, resizeStartWidth.current + directedDelta));
+      setStackedSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingStacked(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingStacked, layoutConfig.schemaPosition]);
+
+  useEffect(() => {
+    if (!isResizingBrowsers) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const container = document.querySelector('.sidebar');
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const deltaY = e.clientY - resizeStartY.current;
+      const containerHeight = rect.height;
+      const deltaRatio = deltaY / containerHeight;
+      const newRatio = Math.max(0.2, Math.min(0.8, resizeStartRatio.current + deltaRatio));
+      setBrowserSplitRatio(newRatio);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingBrowsers(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingBrowsers]);
+
   // Warn before closing window with unsaved changes
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -441,6 +619,96 @@ function App() {
     }
   };
 
+  // Render components with layout props
+  const renderSchemaBrowser = () => (
+    <SchemaBrowser
+      isVisible={showSchemaBrowser}
+      onToggle={() => setShowSchemaBrowser(!showSchemaBrowser)}
+      isConnected={isConnected}
+      onInsertText={handleInsertText}
+      recentTables={recentTables}
+      connectionId={currentConnection?.id}
+      position={layoutConfig.schemaPosition}
+      onPositionChange={handleSchemaPositionChange}
+      showLayoutMode={showLayoutModeOption && layoutConfig.schemaPosition === layoutConfig.filePosition}
+      layoutMode={layoutConfig.layoutMode}
+      onLayoutModeChange={handleLayoutModeChange}
+    />
+  );
+
+  const renderFileBrowser = () => (
+    <FileBrowser
+      isVisible={showFileBrowser}
+      onToggle={() => setShowFileBrowser(!showFileBrowser)}
+      onFileOpen={handleFileOpen}
+      connectionId={currentConnection?.id}
+      position={layoutConfig.filePosition}
+      onPositionChange={handleFilePositionChange}
+      showLayoutMode={showLayoutModeOption && layoutConfig.schemaPosition === layoutConfig.filePosition}
+      layoutMode={layoutConfig.layoutMode}
+      onLayoutModeChange={handleLayoutModeChange}
+    />
+  );
+
+  const renderMainPanel = () => (
+    <div className="main-panel">
+      <div className="editor-container">
+        {activeTab.filePath && changedFiles.has(activeTab.filePath) && (
+          <div className="file-changed-banner">
+            <span>This file was changed externally.</span>
+            <button
+              onClick={() => handleReloadFile(activeTab.filePath!)}
+              className="btn-reload"
+            >
+              Reload
+            </button>
+            <button
+              onClick={() => {
+                setChangedFiles((prev) => {
+                  const next = new Set(prev);
+                  next.delete(activeTab.filePath!);
+                  return next;
+                });
+              }}
+              className="btn-dismiss"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+        <Editor
+          height="100%"
+          defaultLanguage="sql"
+          value={activeTab.sql}
+          onChange={(value) => handleSqlChange(value || '')}
+          theme={theme === 'dark' ? 'vs-dark' : 'vs'}
+          onMount={(editor) => {
+            editorRef.current = editor;
+          }}
+          options={{
+            minimap: { enabled: false },
+            fontSize: 14,
+            lineHeight: 22,
+            padding: { top: 12 },
+            fontFamily: 'IBM Plex Mono, Monaco, Menlo, Consolas, monospace',
+          }}
+        />
+      </div>
+
+      <div className="results-container">
+        {error && <div className="error">{error}</div>}
+
+        {activeTab.results && (
+          <ResultsTable
+            results={activeTab.results}
+            onExportCSV={handleExportCSV}
+            onCopyToClipboard={handleCopyToClipboard}
+          />
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="app">
       {showConnectionDialog && (
@@ -493,79 +761,76 @@ function App() {
       />
 
       <div className="content">
-        <div className="sidebar">
-          <SchemaBrowser
-            isVisible={showSchemaBrowser}
-            onToggle={() => setShowSchemaBrowser(!showSchemaBrowser)}
-            isConnected={isConnected}
-            onInsertText={handleInsertText}
-            recentTables={recentTables}
-            connectionId={currentConnection?.id}
-          />
-          <FileBrowser
-            isVisible={showFileBrowser}
-            onToggle={() => setShowFileBrowser(!showFileBrowser)}
-            onFileOpen={handleFileOpen}
-            connectionId={currentConnection?.id}
-          />
-        </div>
-
-        <div className="main-panel">
-          <div className="editor-container">
-            {activeTab.filePath && changedFiles.has(activeTab.filePath) && (
-              <div className="file-changed-banner">
-                <span>This file was changed externally.</span>
-                <button
-                  onClick={() => handleReloadFile(activeTab.filePath!)}
-                  className="btn-reload"
-                >
-                  Reload
-                </button>
-                <button
-                  onClick={() => {
-                    setChangedFiles((prev) => {
-                      const next = new Set(prev);
-                      next.delete(activeTab.filePath!);
-                      return next;
-                    });
-                  }}
-                  className="btn-dismiss"
-                >
-                  Dismiss
-                </button>
-              </div>
-            )}
-            <Editor
-              height="100%"
-              defaultLanguage="sql"
-              value={activeTab.sql}
-              onChange={(value) => handleSqlChange(value || '')}
-              theme={theme === 'dark' ? 'vs-dark' : 'vs'}
-              onMount={(editor) => {
-                editorRef.current = editor;
-              }}
-              options={{
-                minimap: { enabled: false },
-                fontSize: 14,
-                lineHeight: 22,
-                padding: { top: 12 },
-                fontFamily: 'IBM Plex Mono, Monaco, Menlo, Consolas, monospace',
-              }}
-            />
+        {/* Schema browser on left - horizontal mode or alone */}
+        {showSchemaBrowser && layoutConfig.schemaPosition === 'left' &&
+         (layoutConfig.filePosition !== 'left' || layoutConfig.layoutMode === 'horizontal') && (
+          <div className="browser-panel" style={{ width: `${schemaBrowserWidth}px` }}>
+            {renderSchemaBrowser()}
+            <div className="resize-handle-browser" onMouseDown={handleSchemaBrowserResizeStart} title="Drag to resize"></div>
           </div>
+        )}
 
-          <div className="results-container">
-            {error && <div className="error">{error}</div>}
-
-            {activeTab.results && (
-              <ResultsTable
-                results={activeTab.results}
-                onExportCSV={handleExportCSV}
-                onCopyToClipboard={handleCopyToClipboard}
-              />
-            )}
+        {/* File browser on left - horizontal mode or alone */}
+        {showFileBrowser && layoutConfig.filePosition === 'left' &&
+         (layoutConfig.schemaPosition !== 'left' || layoutConfig.layoutMode === 'horizontal') && (
+          <div className="browser-panel" style={{ width: `${fileBrowserWidth}px` }}>
+            {renderFileBrowser()}
+            <div className="resize-handle-browser" onMouseDown={handleFileBrowserResizeStart} title="Drag to resize"></div>
           </div>
-        </div>
+        )}
+
+        {/* Both browsers on left - stacked mode */}
+        {showSchemaBrowser && showFileBrowser &&
+         layoutConfig.schemaPosition === 'left' && layoutConfig.filePosition === 'left' &&
+         layoutConfig.layoutMode === 'stacked' && (
+          <div className="sidebar sidebar-stacked" style={{ width: `${stackedSidebarWidth}px` }}>
+            <div className="browser-container" style={{ flex: browserSplitRatio }}>
+              {renderSchemaBrowser()}
+            </div>
+            <div className="resize-handle-browsers vertical" onMouseDown={handleBrowsersResizeStart} title="Drag to resize"></div>
+            <div className="browser-container" style={{ flex: 1 - browserSplitRatio }}>
+              {renderFileBrowser()}
+            </div>
+            <div className="resize-handle-sidebar" onMouseDown={handleStackedSidebarResizeStart} title="Drag to resize"></div>
+          </div>
+        )}
+
+        {/* Main panel in center */}
+        {renderMainPanel()}
+
+        {/* Schema browser on right - horizontal mode or alone */}
+        {showSchemaBrowser && layoutConfig.schemaPosition === 'right' &&
+         (layoutConfig.filePosition !== 'right' || layoutConfig.layoutMode === 'horizontal') && (
+          <div className="browser-panel browser-panel-right" style={{ width: `${schemaBrowserWidth}px` }}>
+            <div className="resize-handle-browser resize-handle-left" onMouseDown={handleSchemaBrowserResizeStart} title="Drag to resize"></div>
+            {renderSchemaBrowser()}
+          </div>
+        )}
+
+        {/* File browser on right - horizontal mode or alone */}
+        {showFileBrowser && layoutConfig.filePosition === 'right' &&
+         (layoutConfig.schemaPosition !== 'right' || layoutConfig.layoutMode === 'horizontal') && (
+          <div className="browser-panel browser-panel-right" style={{ width: `${fileBrowserWidth}px` }}>
+            <div className="resize-handle-browser resize-handle-left" onMouseDown={handleFileBrowserResizeStart} title="Drag to resize"></div>
+            {renderFileBrowser()}
+          </div>
+        )}
+
+        {/* Both browsers on right - stacked mode */}
+        {showSchemaBrowser && showFileBrowser &&
+         layoutConfig.schemaPosition === 'right' && layoutConfig.filePosition === 'right' &&
+         layoutConfig.layoutMode === 'stacked' && (
+          <div className="sidebar sidebar-stacked sidebar-right" style={{ width: `${stackedSidebarWidth}px` }}>
+            <div className="resize-handle-sidebar resize-handle-left" onMouseDown={handleStackedSidebarResizeStart} title="Drag to resize"></div>
+            <div className="browser-container" style={{ flex: browserSplitRatio }}>
+              {renderSchemaBrowser()}
+            </div>
+            <div className="resize-handle-browsers vertical" onMouseDown={handleBrowsersResizeStart} title="Drag to resize"></div>
+            <div className="browser-container" style={{ flex: 1 - browserSplitRatio }}>
+              {renderFileBrowser()}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

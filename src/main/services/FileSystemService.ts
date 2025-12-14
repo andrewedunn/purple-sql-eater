@@ -229,7 +229,9 @@ export class FileSystemService {
           type: entry.isDirectory() ? 'folder' : 'file',
           extension: entry.isFile() ? path.extname(entry.name) : undefined,
           size: stats.size,
-          modified: stats.mtime,
+          modified: stats.mtime as any, // Electron IPC will serialize to string
+          // Use birthtime (creation date) or fall back to mtime if unavailable
+          created: (stats.birthtime || stats.mtime) as any, // Electron IPC will serialize to string
         });
       }
 

@@ -23,17 +23,25 @@
   - Reduced table padding
   - Better visual design with design system
   - Light/dark theme toggle
+- **Layout System**:
+  - Flexible browser positioning (Schema and File browsers)
+  - Independent placement (left, right, hidden)
+  - Stacked or horizontal modes when both on same side
+  - Resizable browsers with direction-aware handles
 
 ## Up Next (High Priority)
 
 ### SQL File Storage
 **Why**: Critical workflow need for saving and organizing queries
+**Status**: Partially implemented - file browsing complete, file operations in progress
 **Features**:
 - [ ] Save query tabs to .sql files
-- [ ] Folder-based organization
-- [ ] Search across saved queries
-- [ ] File tree sidebar
+- [x] File tree sidebar with workspace selection
+- [x] Folder navigation and browsing
+- [x] Smart date sorting (created/modified with cycling)
+- [ ] File content search (currently filters by filename only)
 - [ ] Auto-save drafts
+- [ ] Create/rename/delete operations
 
 ### Context-Aware Autocomplete
 **Why**: Major productivity boost for daily use

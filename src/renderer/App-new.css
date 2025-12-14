@@ -70,12 +70,95 @@
   position: relative;
 }
 
-.sidebar {
+/* Individual browser panel */
+.browser-panel {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  width: var(--sidebar-width);
   flex-shrink: 0;
+  position: relative;
+}
+
+/* Browser panel resize handle on right edge */
+.browser-panel .resize-handle-browser {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 100;
+}
+
+/* Browser panel on right side has handle on left edge */
+.browser-panel-right .resize-handle-browser.resize-handle-left {
+  left: 0;
+  right: auto;
+}
+
+.resize-handle-browser:hover {
+  background: var(--color-accent);
+  opacity: 0.5;
+}
+
+/* Stacked sidebar for when both browsers are on same side in stacked mode */
+.sidebar.sidebar-stacked {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* Browser container for when both browsers are in the sidebar */
+.browser-container {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* Stacked sidebar resize handle on right edge */
+.sidebar-stacked .resize-handle-sidebar {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 100;
+}
+
+/* Right stacked sidebar has handle on left edge */
+.sidebar-stacked.sidebar-right .resize-handle-sidebar.resize-handle-left {
+  left: 0;
+  right: auto;
+}
+
+.resize-handle-sidebar:hover {
+  background: var(--color-accent);
+  opacity: 0.5;
+}
+
+/* Resize handle between browsers in stacked mode */
+.resize-handle-browsers {
+  background: transparent;
+  flex-shrink: 0;
+  z-index: 50;
+}
+
+.resize-handle-browsers.vertical {
+  height: 4px;
+  width: 100%;
+  cursor: row-resize;
+}
+
+.resize-handle-browsers:hover {
+  background: var(--color-accent);
+  opacity: 0.5;
 }
 
 .main-panel {

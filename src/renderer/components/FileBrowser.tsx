@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import type { FileNode, FileTree, FileSearchResult } from '../../shared/types';
+import { LayoutMenu } from './LayoutMenu';
 import './FileBrowser.css';
 
 interface FileBrowserProps {
@@ -10,6 +11,11 @@ interface FileBrowserProps {
   onToggle: () => void;
   onFileOpen: (filePath: string) => void;
   connectionId?: string; // Used to clear on connection change
+  position?: 'left' | 'right';
+  onPositionChange?: (position: 'left' | 'right') => void;
+  showLayoutMode?: boolean;
+  layoutMode?: 'stacked' | 'horizontal';
+  onLayoutModeChange?: (mode: 'stacked' | 'horizontal') => void;
 }
 
 export function FileBrowser({
@@ -17,6 +23,11 @@ export function FileBrowser({
   onToggle,
   onFileOpen,
   connectionId,
+  position = 'left',
+  onPositionChange,
+  showLayoutMode = false,
+  layoutMode = 'stacked',
+  onLayoutModeChange,
 }: FileBrowserProps) {
   const [workspace, setWorkspace] = useState<string | null>(null);
   const [fileTree, setFileTree] = useState<FileTree | null>(null);
@@ -35,6 +46,8 @@ export function FileBrowser({
   const [showNewFileDialog, setShowNewFileDialog] = useState<string | null>(null);
   const [showNewFolderDialog, setShowNewFolderDialog] = useState<string | null>(null);
   const [dialogValue, setDialogValue] = useState('');
+  const [sortBy, setSortBy] = useState<'name' | 'modified' | 'created'>('modified');
+  const [sortAscending, setSortAscending] = useState(false);
 
   // Load workspace on mount
   useEffect(() => {
@@ -207,40 +220,107 @@ export function FileBrowser({
     }
   };
 
-  // Filter files based on search query
+  // Filter and sort files based on search query and sort order
   const filteredNodes = useMemo(() => {
-    if (!fileTree || !searchQuery.trim()) {
-      return fileTree?.nodes || [];
+    const nodes = fileTree?.nodes || [];
+
+    // Apply search filter
+    let filtered = nodes;
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      const filterNode = (node: FileNode): FileNode | null => {
+        const nameMatch = node.name.toLowerCase().includes(query);
+
+        if (node.type === 'file') {
+          // Only show .sql files
+          const isSqlFile = node.name.toLowerCase().endsWith('.sql');
+          return nameMatch && isSqlFile ? node : null;
+        }
+
+        // For folders, recursively filter children
+        const filteredChildren = node.children
+          ?.map(filterNode)
+          .filter((n): n is FileNode => n !== null) || [];
+
+        // Include folder if it matches or has matching children
+        if (nameMatch || filteredChildren.length > 0) {
+          return {
+            ...node,
+            children: filteredChildren,
+          };
+        }
+
+        return null;
+      };
+
+      filtered = nodes
+        .map(filterNode)
+        .filter((n): n is FileNode => n !== null);
+    } else {
+      // When no search query, still filter to only .sql files
+      const filterNode = (node: FileNode): FileNode | null => {
+        if (node.type === 'file') {
+          const isSqlFile = node.name.toLowerCase().endsWith('.sql');
+          return isSqlFile ? node : null;
+        }
+
+        // For folders, recursively filter children
+        const filteredChildren = node.children
+          ?.map(filterNode)
+          .filter((n): n is FileNode => n !== null) || [];
+
+        // Include folder if it has matching children
+        if (filteredChildren.length > 0) {
+          return {
+            ...node,
+            children: filteredChildren,
+          };
+        }
+
+        return null;
+      };
+
+      filtered = nodes
+        .map(filterNode)
+        .filter((n): n is FileNode => n !== null);
     }
 
-    const query = searchQuery.toLowerCase();
-    const filterNode = (node: FileNode): FileNode | null => {
-      const nameMatch = node.name.toLowerCase().includes(query);
+    // Apply sorting to files within each folder
+    const sortNodes = (nodesToSort: FileNode[]): FileNode[] => {
+      const folders = nodesToSort.filter(n => n.type === 'folder');
+      const files = nodesToSort.filter(n => n.type === 'file');
 
-      if (node.type === 'file') {
-        return nameMatch ? node : null;
-      }
+      // Sort files based on current sort option
+      files.sort((a, b) => {
+        let comparison = 0;
+        if (sortBy === 'name') {
+          comparison = a.name.localeCompare(b.name);
+        } else if (sortBy === 'modified') {
+          const aDate = a.modified ? new Date(a.modified).getTime() : 0;
+          const bDate = b.modified ? new Date(b.modified).getTime() : 0;
+          comparison = bDate - aDate; // Newest first by default
+        } else { // created
+          const aDate = a.created ? new Date(a.created).getTime() : 0;
+          const bDate = b.created ? new Date(b.created).getTime() : 0;
+          comparison = bDate - aDate; // Newest first by default
+        }
+        return sortAscending ? -comparison : comparison;
+      });
 
-      // For folders, recursively filter children
-      const filteredChildren = node.children
-        ?.map(filterNode)
-        .filter((n): n is FileNode => n !== null) || [];
+      // Folders always alphabetically
+      folders.sort((a, b) => a.name.localeCompare(b.name));
 
-      // Include folder if it matches or has matching children
-      if (nameMatch || filteredChildren.length > 0) {
-        return {
-          ...node,
-          children: filteredChildren,
-        };
-      }
+      // Recursively sort children
+      const sortedFolders = folders.map(folder => ({
+        ...folder,
+        children: folder.children ? sortNodes(folder.children) : undefined,
+      }));
 
-      return null;
+      return [...sortedFolders, ...files];
     };
 
-    return fileTree.nodes
-      .map(filterNode)
-      .filter((n): n is FileNode => n !== null);
-  }, [fileTree, searchQuery]);
+    return sortNodes(filtered);
+  }, [fileTree, searchQuery, sortBy, sortAscending]);
 
   // Auto-expand folders when searching
   useEffect(() => {
@@ -268,9 +348,7 @@ export function FileBrowser({
         setIsLoading(true);
         try {
           const results = await window.electron.fileSearch(searchQuery, {
-            searchContent: true,
-            searchFilenames: false,
-            caseSensitive: false,
+            mode: 'content',
             maxResults: 100,
           });
           setContentSearchResults(results);
@@ -291,8 +369,6 @@ export function FileBrowser({
 
   const renderContentSearchResult = (result: FileSearchResult): JSX.Element => {
     const fileName = result.path.split('/').pop() || result.name;
-    const extension = fileName.includes('.') ? `.${fileName.split('.').pop()}` : '';
-    const isSql = extension === '.sql';
 
     return (
       <div key={result.path} className="search-result-item">
@@ -300,15 +376,14 @@ export function FileBrowser({
           className="search-result-file"
           onClick={() => handleFileClick(result.path)}
         >
-          <span className={`file-icon ${isSql ? 'sql' : ''}`}>📄</span>
           <span className="file-name">{fileName}</span>
           <span className="file-score">{result.matches.length} match{result.matches.length !== 1 ? 'es' : ''}</span>
         </div>
         <div className="search-result-matches">
           {result.matches.slice(0, 3).map((match, idx) => (
             <div key={idx} className="search-match">
-              <span className="match-line">Line {match.lineNumber}:</span>
-              <span className="match-text">{match.line.trim()}</span>
+              <span className="match-line">Line {match.line}:</span>
+              <span className="match-text">{match.text.trim()}</span>
             </div>
           ))}
           {result.matches.length > 3 && (
@@ -350,8 +425,40 @@ export function FileBrowser({
     }
 
     // File node
-    const extension = node.extension || '';
-    const isSql = extension === '.sql';
+    const formatDate = (date: Date | string | undefined): string => {
+      if (!date) return '-';
+      // Handle dates that come as strings from IPC
+      const d = typeof date === 'string' ? new Date(date) : new Date(date);
+      // Check if date is valid
+      if (isNaN(d.getTime())) return '-';
+      const now = new Date();
+      const diffMs = now.getTime() - d.getTime();
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+      // Within last 24 hours - show relative time
+      if (diffHours < 1) {
+        return 'Just now';
+      } else if (diffHours < 24) {
+        return `${diffHours}h ago`;
+      } else if (diffDays === 1) {
+        return 'Yesterday';
+      } else if (diffDays < 7) {
+        return `${diffDays}d ago`;
+      }
+
+      // Same year - show month and day only
+      if (d.getFullYear() === now.getFullYear()) {
+        return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      }
+
+      // Different year - include year
+      return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+    };
+
+    // Show date based on current sort mode
+    const dateToShow = sortBy === 'created' ? node.created : node.modified;
+    const dateLabel = sortBy === 'created' ? 'Created' : 'Modified';
 
     return (
       <div
@@ -361,26 +468,27 @@ export function FileBrowser({
         onClick={() => handleFileClick(node.path)}
         onContextMenu={(e) => handleContextMenu(e, node)}
       >
-        <span className={`file-icon ${isSql ? 'sql' : ''}`}>📄</span>
-        <span className="file-name">{node.name}</span>
+        <span className="file-name" title={node.name}>{node.name}</span>
+        <span className="file-date" title={`${dateLabel}: ${dateToShow ? new Date(dateToShow).toLocaleString() : 'Unknown'}`}>
+          {formatDate(dateToShow)}
+        </span>
       </div>
     );
   };
 
+  if (!isVisible) {
+    return (
+      <button className="file-toggle collapsed" onClick={onToggle} title="Show files">
+        📁
+      </button>
+    );
+  }
+
   return (
-    <div className={`file-browser ${isVisible ? '' : 'collapsed'}`}>
+    <div className="file-browser">
       <div className="file-browser-header">
-        <div className="file-browser-title">
-          <button
-            className="toggle-btn"
-            onClick={onToggle}
-            title={isVisible ? 'Hide files' : 'Show files'}
-          >
-            {isVisible ? '◀' : '▶'}
-          </button>
-          <span>Files</span>
-        </div>
-        {isVisible && (
+        <h3 className="file-browser-title">Files</h3>
+        <div className="file-browser-actions">
           <button
             className="workspace-btn"
             onClick={handleSelectWorkspace}
@@ -388,12 +496,27 @@ export function FileBrowser({
           >
             📁
           </button>
-        )}
+          {onPositionChange && (
+            <LayoutMenu
+              currentPosition={position}
+              onPositionChange={onPositionChange}
+              showLayoutMode={showLayoutMode}
+              currentLayoutMode={layoutMode}
+              onLayoutModeChange={onLayoutModeChange}
+            />
+          )}
+          <button
+            className="toggle-btn"
+            onClick={onToggle}
+            title="Hide files"
+          >
+            ◀
+          </button>
+        </div>
       </div>
 
-      {isVisible && (
-        <div className="file-browser-content">
-          {!workspace ? (
+      <div className="file-browser-content">
+        {!workspace ? (
             <div className="empty-state">
               <p>No workspace selected</p>
               <button onClick={handleSelectWorkspace} className="btn-select-workspace">
@@ -402,40 +525,30 @@ export function FileBrowser({
             </div>
           ) : (
             <>
-              <div className="search-container">
-                <div className="search-box">
-                  <input
-                    type="text"
-                    placeholder={searchMode === 'filename' ? 'Search files...' : 'Search content...'}
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="search-input"
-                  />
+              <div className="file-search">
+                <input
+                  type="text"
+                  placeholder={searchMode === 'filename' ? 'Search files...' : 'Search content...'}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                <div className="search-controls">
+                  <button
+                    className={`search-mode-btn ${searchMode === 'filename' ? 'active' : ''}`}
+                    onClick={() => setSearchMode(searchMode === 'filename' ? 'content' : 'filename')}
+                    title={searchMode === 'filename' ? 'Switch to content search' : 'Switch to filename search'}
+                  >
+                    {searchMode === 'filename' ? '📄' : '🔍'}
+                  </button>
                   {searchQuery && (
                     <button
                       className="search-clear"
                       onClick={() => setSearchQuery('')}
                       title="Clear search"
                     >
-                      ×
+                      ✕
                     </button>
                   )}
-                </div>
-                <div className="search-mode-toggle">
-                  <button
-                    className={searchMode === 'filename' ? 'active' : ''}
-                    onClick={() => setSearchMode('filename')}
-                    title="Search by filename"
-                  >
-                    Name
-                  </button>
-                  <button
-                    className={searchMode === 'content' ? 'active' : ''}
-                    onClick={() => setSearchMode('content')}
-                    title="Search file contents"
-                  >
-                    Content
-                  </button>
                 </div>
               </div>
 
@@ -454,34 +567,82 @@ export function FileBrowser({
                   )}
                 </div>
               ) : (
-                <div
-                  className="file-tree"
-                  onContextMenu={(e) => handleContextMenu(e, null)}
-                >
-                  {filteredNodes.length === 0 ? (
-                    <div className="empty-results">
-                      {searchQuery ? 'No files found' : 'No files in workspace'}
-                    </div>
-                  ) : (
-                    filteredNodes.map((node) => renderFileNode(node, 0))
-                  )}
-                </div>
+                <>
+                  <div className="file-tree-header">
+                    <button
+                      className={`column-header name-column ${sortBy === 'name' ? 'active' : ''}`}
+                      onClick={() => {
+                        if (sortBy === 'name') {
+                          setSortAscending(!sortAscending);
+                        } else {
+                          setSortBy('name');
+                          setSortAscending(false);
+                        }
+                      }}
+                      title="Sort by name"
+                    >
+                      Name
+                      {sortBy === 'name' && (
+                        <span className="sort-indicator">{sortAscending ? '↑' : '↓'}</span>
+                      )}
+                    </button>
+                    <button
+                      className={`column-header date-column ${sortBy !== 'name' ? 'active' : ''}`}
+                      onClick={() => {
+                        // Cycle through: modified -> created -> modified (with sort toggle)
+                        if (sortBy === 'name') {
+                          setSortBy('modified');
+                          setSortAscending(false);
+                        } else if (sortBy === 'modified') {
+                          if (sortAscending) {
+                            // Was ascending modified, switch to created
+                            setSortBy('created');
+                            setSortAscending(false);
+                          } else {
+                            // Was descending modified, toggle to ascending
+                            setSortAscending(true);
+                          }
+                        } else {
+                          // Was created, toggle or cycle back to modified
+                          if (sortAscending) {
+                            setSortBy('modified');
+                            setSortAscending(false);
+                          } else {
+                            setSortAscending(true);
+                          }
+                        }
+                      }}
+                      title={`Click to cycle: ${sortBy === 'modified' ? 'Modified → Created' : 'Created → Modified'}`}
+                    >
+                      {sortBy === 'modified' ? 'Modified' : sortBy === 'created' ? 'Created' : 'Date'}
+                      {sortBy !== 'name' && (
+                        <span className="sort-indicator">{sortAscending ? '↑' : '↓'}</span>
+                      )}
+                    </button>
+                  </div>
+                  <div
+                    className="file-tree"
+                    onContextMenu={(e) => handleContextMenu(e, null)}
+                  >
+                    {filteredNodes.length === 0 ? (
+                      <div className="empty-results">
+                        {searchQuery ? 'No files found' : 'No files in workspace'}
+                      </div>
+                    ) : (
+                      filteredNodes.map((node) => renderFileNode(node, 0))
+                    )}
+                  </div>
+                </>
               )}
 
               <div className="workspace-info">
                 <div className="workspace-path" title={workspace}>
                   {workspace.split('/').pop()}
                 </div>
-                {fileTree && (
-                  <div className="workspace-stats">
-                    {fileTree.totalFiles} file{fileTree.totalFiles !== 1 ? 's' : ''}, {fileTree.totalFolders} folder{fileTree.totalFolders !== 1 ? 's' : ''}
-                  </div>
-                )}
               </div>
             </>
           )}
         </div>
-      )}
 
       {/* Context Menu */}
       {contextMenu && (

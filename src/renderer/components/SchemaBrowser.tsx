@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import type { Table } from '../../shared/types';
+import { LayoutMenu } from './LayoutMenu';
 import './SchemaBrowser.css';
 
 interface SchemaBrowserProps {
@@ -12,6 +13,11 @@ interface SchemaBrowserProps {
   onInsertText?: (text: string) => void;
   recentTables?: string[];
   connectionId?: string;
+  position?: 'left' | 'right';
+  onPositionChange?: (position: 'left' | 'right') => void;
+  showLayoutMode?: boolean;
+  layoutMode?: 'stacked' | 'horizontal';
+  onLayoutModeChange?: (mode: 'stacked' | 'horizontal') => void;
 }
 
 export function SchemaBrowser({
@@ -21,6 +27,11 @@ export function SchemaBrowser({
   onInsertText,
   recentTables = [],
   connectionId,
+  position = 'left',
+  onPositionChange,
+  showLayoutMode = false,
+  layoutMode = 'stacked',
+  onLayoutModeChange,
 }: SchemaBrowserProps) {
   const [tables, setTables] = useState<Table[]>([]);
   const [loading, setLoading] = useState(false);
@@ -35,10 +46,6 @@ export function SchemaBrowser({
   const [displayMode, setDisplayMode] = useState<'filter' | 'highlight'>('filter');
   const scrollRef = useRef<HTMLDivElement>(null);
   const [savedScrollTop, setSavedScrollTop] = useState(0);
-  const [sidebarWidth, setSidebarWidth] = useState(300);
-  const [isResizing, setIsResizing] = useState(false);
-  const resizeStartX = useRef(0);
-  const resizeStartWidth = useRef(300);
   const [focusedItem, setFocusedItem] = useState<string | null>(null);
   const browserRef = useRef<HTMLDivElement>(null);
   const [loadedColumns, setLoadedColumns] = useState<Set<string>>(new Set());
@@ -439,35 +446,6 @@ export function SchemaBrowser({
     }, 100);
   };
 
-  const handleResizeStart = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizing(true);
-    resizeStartX.current = e.clientX;
-    resizeStartWidth.current = sidebarWidth;
-  };
-
-  useEffect(() => {
-    if (!isResizing) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const delta = e.clientX - resizeStartX.current;
-      const newWidth = Math.max(200, Math.min(600, resizeStartWidth.current + delta));
-      setSidebarWidth(newWidth);
-    };
-
-    const handleMouseUp = () => {
-      setIsResizing(false);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isResizing]);
-
   // Build flat list of visible items for keyboard navigation
   const getVisibleItems = (): Array<{ type: 'schema' | 'table' | 'column'; id: string; schemaName?: string; table?: Table; columnName?: string }> => {
     const items: Array<{ type: 'schema' | 'table' | 'column'; id: string; schemaName?: string; table?: Table; columnName?: string }> = [];
@@ -605,7 +583,7 @@ export function SchemaBrowser({
 
   return (
     <>
-      <div className="schema-browser" style={{ width: `${sidebarWidth}px` }} ref={browserRef} tabIndex={0}>
+      <div className="schema-browser" ref={browserRef} tabIndex={0}>
         <div className="schema-header">
           <h3>Schema</h3>
           <div className="schema-header-actions">
@@ -623,6 +601,15 @@ export function SchemaBrowser({
             <button className="schema-action-btn" onClick={expandAll} title="Expand all schemas">
               ◨
             </button>
+            {onPositionChange && (
+              <LayoutMenu
+                currentPosition={position}
+                onPositionChange={onPositionChange}
+                showLayoutMode={showLayoutMode}
+                currentLayoutMode={layoutMode}
+                onLayoutModeChange={onLayoutModeChange}
+              />
+            )}
             <button className="schema-toggle-btn" onClick={onToggle} title="Hide schema">
               ◀
             </button>
@@ -833,7 +820,6 @@ export function SchemaBrowser({
             </div>
           </>
         )}
-        <div className="resize-handle-sidebar" onMouseDown={handleResizeStart} title="Drag to resize"></div>
       </div>
     </>
   );

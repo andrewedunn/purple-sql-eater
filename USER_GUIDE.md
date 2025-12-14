@@ -7,6 +7,8 @@ A fast, simple SQL client designed for business intelligence analysts and data p
 - [Getting Started](#getting-started)
 - [Connecting to Databases](#connecting-to-databases)
 - [Schema Browser](#schema-browser)
+- [File Browser](#file-browser)
+- [Layout Configuration](#layout-configuration)
 - [Writing Queries](#writing-queries)
 - [Working with Results](#working-with-results)
 - [Tabs and Navigation](#tabs-and-navigation)
@@ -157,6 +159,74 @@ Drag the right edge of the schema browser to resize (min 200px, max 600px).
 
 - Click ◀ to hide the schema browser
 - Click ▶ (on left edge) to show it again
+
+---
+
+## File Browser
+
+The file browser lets you browse and manage SQL files in your workspace folder.
+
+### Setting Up a Workspace
+
+**Select Folder:**
+1. Click the folder icon (📁) in the file browser header
+2. Choose a folder containing your SQL files
+3. The file browser shows all .sql files in that folder and subfolders
+
+**Workspace Info:**
+- Current workspace path shown at bottom of file browser
+- File count displayed
+
+### Browsing Files
+
+**File Tree:**
+- Folders show item count in parentheses
+- Click folders to expand/collapse
+- SQL files show with smart date formatting
+
+**Date Display:**
+- Click the date column header to cycle through sorting modes:
+  - Modified ↓ (newest first)
+  - Modified ↑ (oldest first)
+  - Created ↓ (newest first)
+  - Created ↑ (oldest first)
+- Date format adjusts automatically:
+  - Recent: "2h ago", "Yesterday"
+  - This week: "3d ago"
+  - This year: "Dec 13"
+  - Previous years: "Mar 27, 2024"
+
+**Name Sorting:**
+- Click the "Name" column header to sort alphabetically
+- Toggle between ascending (↑) and descending (↓)
+
+### File Search
+
+Type in the search box to filter files by name (SQL files only).
+
+### Resizing and Hiding
+
+- Drag the edge of the file browser to resize
+- Click the collapse button to hide/show
+
+---
+
+## Layout Configuration
+
+Configure where the Schema and File browsers appear using the layout menu (grid icon) in the toolbar.
+
+**Browser Positioning:**
+- **Schema Browser**: Left, Right, or Hidden
+- **File Browser**: Left, Right, or Hidden
+
+**Layout Modes** (when both browsers on same side):
+- **Stacked**: Browsers stack vertically with resizable divider
+- **Horizontal**: Browsers side-by-side with independent widths
+
+**Resizing:**
+- Drag browser edges to resize
+- Drag divider between stacked browsers to adjust split
+- Each browser remembers its width independently
 
 ---
 

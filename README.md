@@ -11,6 +11,8 @@ A fast, simple SQL client built with Electron for business intelligence analysts
 - ✅ Fast schema browser (~3-5s load, instant from cache)
 - ✅ Background column loading with progress indicator
 - ✅ Advanced search (tables, columns, views)
+- ✅ File browser with workspace selection and smart date sorting
+- ✅ Flexible layout (position Schema and File browsers independently)
 - ✅ SQL editor with syntax highlighting (Monaco)
 - ✅ Query execution with results table
 - ✅ Multi-tab interface

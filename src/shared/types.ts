@@ -47,6 +47,7 @@ export interface FileNode {
   extension?: string;
   size?: number;
   modified?: Date;
+  created?: Date;
   children?: FileNode[];
 }
 

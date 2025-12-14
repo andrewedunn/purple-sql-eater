@@ -1,0 +1,102 @@
+.layout-menu {
+  position: relative;
+}
+
+.layout-menu-btn {
+  width: 24px;
+  height: 24px;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.layout-menu-btn:hover {
+  background-color: var(--color-accent-light);
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.layout-menu-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-2);
+  min-width: 180px;
+  z-index: 1000;
+}
+
+.layout-menu-section {
+  padding: var(--space-1) 0;
+}
+
+.layout-menu-label {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+.layout-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  font-family: var(--font-ui);
+}
+
+.layout-menu-item:hover {
+  background-color: var(--color-surface-hover);
+}
+
+.layout-menu-item.active {
+  background-color: var(--color-accent-light);
+  color: var(--color-accent);
+}
+
+.menu-radio {
+  font-size: 10px;
+  color: var(--color-accent);
+  width: 12px;
+  flex-shrink: 0;
+}
+
+.menu-icon {
+  font-size: 14px;
+  color: var(--color-text-tertiary);
+  width: 16px;
+  flex-shrink: 0;
+}
+
+.layout-menu-item.active .menu-icon {
+  color: var(--color-accent);
+}
+
+.layout-menu-divider {
+  height: 1px;
+  background-color: var(--color-border-light);
+  margin: var(--space-2) 0;
+}
