@@ -22,9 +22,21 @@ export class WorkspaceService {
     try {
       const data = await fs.readFile(this.settingsPath, 'utf-8');
       this.settings = JSON.parse(data);
-    } catch {
-      // No settings file yet, start with defaults
-      this.settings = null;
+    } catch (err: any) {
+      if (err.code === 'ENOENT') {
+        // Expected: no settings file yet
+        this.settings = null;
+      } else if (err instanceof SyntaxError) {
+        console.error('Workspace settings file is corrupted. Resetting to defaults.', err);
+        this.settings = null;
+        // Optionally back up the corrupted file
+        try {
+          await fs.rename(this.settingsPath, `${this.settingsPath}.corrupted`);
+        } catch {}
+      } else {
+        console.error('Failed to load workspace settings:', err);
+        this.settings = null;
+      }
     }
   }
 
@@ -54,6 +66,9 @@ export class WorkspaceService {
     if (!validation.isValid) {
       throw new Error(validation.error || 'Invalid workspace path');
     }
+
+    // Set workspace root for path traversal protection
+    this.fileSystem.setWorkspaceRoot(folderPath);
 
     // Update settings
     this.settings = {
@@ -137,7 +152,8 @@ export class WorkspaceService {
       }
 
       return count;
-    } catch {
+    } catch (err: any) {
+      console.error(`Failed to count files in ${dirPath}:`, err.code || err.message);
       return current;
     }
   }
@@ -283,8 +299,13 @@ export class WorkspaceService {
             score: this.calculateScore(node.name, query) + matches.length,
           };
         }
-      } catch {
-        // Can't read file content (binary file, permission denied, etc.)
+      } catch (err: any) {
+        // Silently skip binary files, but log actual errors
+        if (err.code === 'EISDIR' || err.code === 'ENOENT') {
+          // Expected: directory or deleted file
+          return null;
+        }
+        console.error(`Failed to read file content for search: ${node.path}`, err.code || err.message);
         return null;
       }
     }
@@ -323,7 +344,10 @@ export class WorkspaceService {
     // Keep only last 20
     this.settings.recentFiles = this.settings.recentFiles.slice(0, 20);
 
-    this.saveSettings();
+    // Don't await, but handle errors
+    this.saveSettings().catch(err => {
+      console.error('Failed to save recent files:', err);
+    });
   }
 
   getRecentFiles(): string[] {

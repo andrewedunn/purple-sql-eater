@@ -50,8 +50,15 @@ export function ConnectionPicker({
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(conns));
       setConnections(conns);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save connections:', error);
+
+      // Show user-facing error
+      if (error.name === 'QuotaExceededError') {
+        alert('Cannot save connection: Browser storage is full. Please clear some data.');
+      } else {
+        alert('Failed to save connection. Changes may not persist.');
+      }
     }
   };
 
@@ -162,7 +169,15 @@ export function saveConnection(connection: SavedConnection) {
     }
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(connections));
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to save connection:', error);
+
+    // Show user-facing error
+    if (error.name === 'QuotaExceededError') {
+      alert('Cannot save connection: Browser storage is full. Please clear some data.');
+    } else {
+      alert('Failed to save connection. Changes may not persist.');
+    }
+    throw error; // Re-throw so caller knows it failed
   }
 }

@@ -57,7 +57,22 @@ app.on('activate', () => {
   }
 });
 
-ipcMain.handle('connect', async (_event, config: ConnectionConfig) => {
+// Helper to wrap IPC handlers with error logging
+function handleIPC<T extends (...args: any[]) => any>(
+  channel: string,
+  handler: T
+): void {
+  ipcMain.handle(channel, async (...args) => {
+    try {
+      return await handler(...args);
+    } catch (err) {
+      console.error(`IPC handler '${channel}' failed:`, err);
+      throw err; // Re-throw for client
+    }
+  });
+}
+
+handleIPC('connect', async (_event, config: ConnectionConfig) => {
   if (config.type === 'bigquery') {
     connector = new BigQueryConnector();
     await connector.connect(config);
@@ -66,21 +81,21 @@ ipcMain.handle('connect', async (_event, config: ConnectionConfig) => {
   }
 });
 
-ipcMain.handle('disconnect', async () => {
+handleIPC('disconnect', async () => {
   if (connector) {
     await connector.disconnect();
     connector = null;
   }
 });
 
-ipcMain.handle('execute-query', async (_event, sql: string): Promise<QueryResult> => {
+handleIPC('execute-query', async (_event, sql: string): Promise<QueryResult> => {
   if (!connector) {
     throw new Error('Not connected to a database');
   }
   return await connector.query(sql);
 });
 
-ipcMain.handle('get-schema', async (event) => {
+handleIPC('get-schema', async (event) => {
   if (!connector) {
     throw new Error('Not connected to a database');
   }
@@ -95,7 +110,7 @@ ipcMain.handle('get-schema', async (event) => {
   return await connector.getSchema();
 });
 
-ipcMain.handle('get-columns', async (_event, tableName: string) => {
+handleIPC('get-columns', async (_event, tableName: string) => {
   if (!connector) {
     throw new Error('Not connected to a database');
   }
@@ -103,63 +118,63 @@ ipcMain.handle('get-columns', async (_event, tableName: string) => {
 });
 
 // File system IPC handlers
-ipcMain.handle('workspace-select', async () => {
+handleIPC('workspace-select', async () => {
   return await workspaceService.selectWorkspaceFolder();
 });
 
-ipcMain.handle('workspace-set', async (_event, folderPath: string) => {
+handleIPC('workspace-set', async (_event, folderPath: string) => {
   await workspaceService.setWorkspaceFolder(folderPath);
 });
 
-ipcMain.handle('workspace-get', async () => {
+handleIPC('workspace-get', async () => {
   return workspaceService.getWorkspaceFolder();
 });
 
-ipcMain.handle('workspace-get-tree', async (_event, dirPath: string) => {
+handleIPC('workspace-get-tree', async (_event, dirPath: string) => {
   return await workspaceService.getDirectoryTree(dirPath);
 });
 
-ipcMain.handle('file-read', async (_event, filePath: string) => {
+handleIPC('file-read', async (_event, filePath: string) => {
   return await fileSystemService.readFile(filePath);
 });
 
-ipcMain.handle('file-write', async (_event, filePath: string, content: string) => {
+handleIPC('file-write', async (_event, filePath: string, content: string) => {
   await fileSystemService.writeFile(filePath, content);
 });
 
-ipcMain.handle('file-create', async (_event, filePath: string, content?: string) => {
+handleIPC('file-create', async (_event, filePath: string, content?: string) => {
   await fileSystemService.createFile(filePath, content || '');
 });
 
-ipcMain.handle('file-delete', async (_event, filePath: string) => {
+handleIPC('file-delete', async (_event, filePath: string) => {
   await fileSystemService.deleteFile(filePath);
 });
 
-ipcMain.handle('file-rename', async (_event, oldPath: string, newPath: string) => {
+handleIPC('file-rename', async (_event, oldPath: string, newPath: string) => {
   await fileSystemService.renameFile(oldPath, newPath);
 });
 
-ipcMain.handle('folder-create', async (_event, folderPath: string) => {
+handleIPC('folder-create', async (_event, folderPath: string) => {
   await fileSystemService.createFolder(folderPath);
 });
 
-ipcMain.handle('folder-delete', async (_event, folderPath: string) => {
+handleIPC('folder-delete', async (_event, folderPath: string) => {
   await fileSystemService.deleteFolder(folderPath);
 });
 
-ipcMain.handle('folder-rename', async (_event, oldPath: string, newPath: string) => {
+handleIPC('folder-rename', async (_event, oldPath: string, newPath: string) => {
   await fileSystemService.renameFolder(oldPath, newPath);
 });
 
-ipcMain.handle('folder-list', async (_event, dirPath: string) => {
+handleIPC('folder-list', async (_event, dirPath: string) => {
   return await fileSystemService.listDirectory(dirPath);
 });
 
-ipcMain.handle('file-search', async (_event, query: string, options: SearchOptions) => {
+handleIPC('file-search', async (_event, query: string, options: SearchOptions) => {
   return await workspaceService.searchFiles(query, options);
 });
 
-ipcMain.handle('file-save-dialog', async () => {
+handleIPC('file-save-dialog', async () => {
   const { dialog } = require('electron');
   const result = await dialog.showSaveDialog(mainWindow!, {
     title: 'Save SQL File',
@@ -172,19 +187,19 @@ ipcMain.handle('file-save-dialog', async () => {
   return result.canceled ? null : result.filePath;
 });
 
-ipcMain.handle('recent-files-add', async (_event, filePath: string) => {
+handleIPC('recent-files-add', async (_event, filePath: string) => {
   workspaceService.addRecentFile(filePath);
 });
 
-ipcMain.handle('recent-files-get', async () => {
+handleIPC('recent-files-get', async () => {
   return workspaceService.getRecentFiles();
 });
 
 // File watching IPC handlers
-ipcMain.handle('file-watch', async (_event, filePath: string) => {
+handleIPC('file-watch', async (_event, filePath: string) => {
   await fileWatcherService.watchFile(filePath);
 });
 
-ipcMain.handle('file-unwatch', async (_event, filePath: string) => {
+handleIPC('file-unwatch', async (_event, filePath: string) => {
   fileWatcherService.unwatchFile(filePath);
 });

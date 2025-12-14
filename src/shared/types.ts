@@ -1,10 +1,48 @@
 // ABOUTME: Shared type definitions for database connectors and query results.
 // ABOUTME: These types are used by both main and renderer processes.
 
-export interface ConnectionConfig {
-  type: 'bigquery' | 'mysql' | 'postgresql' | 'snowflake';
-  [key: string]: unknown;
+// Base connection config types for different databases
+export interface BigQueryConnectionConfig {
+  type: 'bigquery';
+  projectId: string;
+  keyFilename?: string;
+  credentials?: object;
 }
+
+// Future database types (not yet implemented)
+export interface MySQLConnectionConfig {
+  type: 'mysql';
+  host: string;
+  port?: number;
+  user: string;
+  password: string;
+  database: string;
+}
+
+export interface PostgreSQLConnectionConfig {
+  type: 'postgresql';
+  host: string;
+  port?: number;
+  user: string;
+  password: string;
+  database: string;
+}
+
+export interface SnowflakeConnectionConfig {
+  type: 'snowflake';
+  account: string;
+  username: string;
+  password: string;
+  database?: string;
+  warehouse?: string;
+}
+
+// Discriminated union of all connection types
+export type ConnectionConfig =
+  | BigQueryConnectionConfig
+  | MySQLConnectionConfig
+  | PostgreSQLConnectionConfig
+  | SnowflakeConnectionConfig;
 
 export interface QueryResult {
   columns: string[];

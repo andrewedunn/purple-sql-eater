@@ -18,7 +18,34 @@ export class FileSystemError extends Error {
 }
 
 export class FileSystemService {
+  private workspaceRoot: string | null = null;
+
+  setWorkspaceRoot(rootPath: string): void {
+    this.workspaceRoot = path.resolve(rootPath);
+  }
+
+  private validatePath(filePath: string): void {
+    if (!this.workspaceRoot) {
+      // No workspace set - allow all paths (backward compatibility)
+      return;
+    }
+
+    const resolvedPath = path.resolve(filePath);
+    const relativePath = path.relative(this.workspaceRoot, resolvedPath);
+
+    // Check if path escapes workspace using path traversal
+    if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+      throw new FileSystemError(
+        `Access denied: Path outside workspace`,
+        'EACCES',
+        filePath,
+        'validate'
+      );
+    }
+  }
+
   async readFile(filePath: string): Promise<string> {
+    this.validatePath(filePath);
     try {
       return await fs.readFile(filePath, 'utf-8');
     } catch (err: any) {
@@ -47,6 +74,7 @@ export class FileSystemService {
   }
 
   async writeFile(filePath: string, content: string): Promise<void> {
+    this.validatePath(filePath);
     try {
       await fs.writeFile(filePath, content, 'utf-8');
     } catch (err: any) {
@@ -82,7 +110,8 @@ export class FileSystemService {
   }
 
   async createFile(filePath: string, content: string = ''): Promise<void> {
-    try {
+    this.validatePath(filePath);
+    try{
       await fs.writeFile(filePath, content, { flag: 'wx', encoding: 'utf-8' });
     } catch (err: any) {
       if (err.code === 'EEXIST') {
@@ -103,6 +132,7 @@ export class FileSystemService {
   }
 
   async deleteFile(filePath: string): Promise<void> {
+    this.validatePath(filePath);
     try {
       await fs.unlink(filePath);
     } catch (err: any) {
@@ -124,6 +154,8 @@ export class FileSystemService {
   }
 
   async renameFile(oldPath: string, newPath: string): Promise<void> {
+    this.validatePath(oldPath);
+    this.validatePath(newPath);
     try {
       await fs.rename(oldPath, newPath);
     } catch (err: any) {
@@ -152,6 +184,7 @@ export class FileSystemService {
   }
 
   async createFolder(folderPath: string): Promise<void> {
+    this.validatePath(folderPath);
     try {
       await fs.mkdir(folderPath, { recursive: true });
     } catch (err: any) {
@@ -165,6 +198,7 @@ export class FileSystemService {
   }
 
   async deleteFolder(folderPath: string): Promise<void> {
+    this.validatePath(folderPath);
     try {
       await fs.rm(folderPath, { recursive: true });
     } catch (err: any) {
@@ -186,6 +220,8 @@ export class FileSystemService {
   }
 
   async renameFolder(oldPath: string, newPath: string): Promise<void> {
+    this.validatePath(oldPath);
+    this.validatePath(newPath);
     try {
       await fs.rename(oldPath, newPath);
     } catch (err: any) {
@@ -215,6 +251,7 @@ export class FileSystemService {
   }
 
   async listDirectory(dirPath: string): Promise<FileNode[]> {
+    this.validatePath(dirPath);
     try {
       const entries = await fs.readdir(dirPath, { withFileTypes: true });
       const nodes: FileNode[] = [];

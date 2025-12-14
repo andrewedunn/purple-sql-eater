@@ -2,13 +2,14 @@
 // ABOUTME: Each tab has its own editor and results, but shares the active connection.
 
 import { useState } from 'react';
+import type { QueryResult } from '../../shared/types';
 import './TabBar.css';
 
 export interface Tab {
   id: string;
   title: string;
   sql: string;
-  results: any | null;
+  results: QueryResult | null;
   filePath?: string;
   isDirty?: boolean;
   isUntitled?: boolean;

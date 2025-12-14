@@ -5,18 +5,12 @@ import { BigQuery } from '@google-cloud/bigquery';
 import type {
   DatabaseConnector,
   ConnectionConfig,
+  BigQueryConnectionConfig,
   QueryResult,
   Schema,
   Table,
   Column,
 } from '../../shared/types';
-
-export interface BigQueryConfig extends ConnectionConfig {
-  type: 'bigquery';
-  projectId: string;
-  keyFilename?: string;
-  credentials?: object;
-}
 
 export class BigQueryConnector implements DatabaseConnector {
   private client: BigQuery | null = null;
@@ -55,7 +49,10 @@ export class BigQueryConnector implements DatabaseConnector {
   }
 
   async connect(config: ConnectionConfig): Promise<void> {
-    const bqConfig = config as BigQueryConfig;
+    if (config.type !== 'bigquery') {
+      throw new Error(`Unsupported connection type: ${config.type}`);
+    }
+    const bqConfig = config as BigQueryConnectionConfig;
     this.projectId = bqConfig.projectId;
 
     const options: any = {
@@ -135,6 +132,8 @@ export class BigQueryConnector implements DatabaseConnector {
 
     // Fetch datasets in parallel with progress updates
     console.time('BigQuery: Get all tables (parallel with progress)');
+    const failedDatasets: Array<{ dataset: string; error: string }> = [];
+
     await Promise.all(
       datasets.map(async (dataset) => {
         try {
@@ -151,14 +150,27 @@ export class BigQueryConnector implements DatabaseConnector {
           tables.push(...datasetTableObjects);
           completed++;
           onProgress(completed, total);
-        } catch (err) {
+        } catch (err: any) {
           console.error(`Failed to fetch tables for dataset ${dataset.id}:`, err);
+
+          // Check for fatal errors that should stop the whole process
+          if (err.code === 401 || err.code === 403 || err.message?.includes('auth')) {
+            throw new Error(`Authentication failed while loading schema: ${err.message}`);
+          }
+
+          // Track per-dataset errors
+          failedDatasets.push({ dataset: dataset.id!, error: err.message });
           completed++;
           onProgress(completed, total);
         }
       })
     );
     console.timeEnd('BigQuery: Get all tables (parallel with progress)');
+
+    // Warn if too many datasets failed
+    if (failedDatasets.length > datasets.length / 2) {
+      console.warn(`Failed to load ${failedDatasets.length}/${datasets.length} datasets. Connection may be unstable.`);
+    }
 
     console.log(`Total tables: ${tables.length}`);
     return { tables };

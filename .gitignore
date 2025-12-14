@@ -4,3 +4,13 @@ dist/
 *.log
 .env
 .env.local
+
+# Build artifacts
+*.js
+*.js.map
+!vite.config.ts
+!electron.vite.config.ts
+
+# IDE
+.vscode/
+.idea/
