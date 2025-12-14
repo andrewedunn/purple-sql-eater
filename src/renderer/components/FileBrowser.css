@@ -273,3 +273,125 @@
   font-size: var(--font-size-xs);
   color: var(--color-text-tertiary);
 }
+
+/* Context Menu */
+.context-menu {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-1);
+  z-index: 1000;
+  min-width: 160px;
+}
+
+.context-menu button {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  font-family: var(--font-ui);
+}
+
+.context-menu button:hover {
+  background-color: var(--color-surface-hover);
+}
+
+.context-menu button.danger {
+  color: var(--color-error);
+}
+
+.context-menu button.danger:hover {
+  background-color: var(--color-error-light);
+}
+
+/* Dialog Styles */
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(26, 26, 26, 0.4);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.dialog-box {
+  background-color: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  min-width: 400px;
+  max-width: 500px;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--color-border);
+}
+
+.dialog-box h3 {
+  margin: 0 0 var(--space-4) 0;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.dialog-box input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-ui);
+  color: var(--color-text);
+  transition: all var(--transition-fast);
+}
+
+.dialog-box input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-light);
+}
+
+.dialog-buttons {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  margin-top: var(--space-4);
+}
+
+.dialog-buttons button {
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  font-family: var(--font-ui);
+  transition: all var(--transition-fast);
+}
+
+.dialog-buttons button:hover {
+  background-color: var(--color-surface-hover);
+  border-color: var(--color-text-tertiary);
+}
+
+.dialog-buttons button.primary {
+  background-color: var(--color-accent);
+  color: white;
+  border-color: var(--color-accent);
+}
+
+.dialog-buttons button.primary:hover {
+  background-color: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+}

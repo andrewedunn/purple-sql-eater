@@ -24,6 +24,15 @@ export function FileBrowser({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    node: FileNode | null;
+  } | null>(null);
+  const [showRenameDialog, setShowRenameDialog] = useState<FileNode | null>(null);
+  const [showNewFileDialog, setShowNewFileDialog] = useState<string | null>(null);
+  const [showNewFolderDialog, setShowNewFolderDialog] = useState<string | null>(null);
+  const [dialogValue, setDialogValue] = useState('');
 
   // Load workspace on mount
   useEffect(() => {
@@ -91,6 +100,111 @@ export function FileBrowser({
     onFileOpen(filePath);
   };
 
+  // Close context menu on click away
+  useEffect(() => {
+    if (contextMenu) {
+      const handleClickAway = () => setContextMenu(null);
+      document.addEventListener('click', handleClickAway);
+      return () => document.removeEventListener('click', handleClickAway);
+    }
+  }, [contextMenu]);
+
+  const handleContextMenu = (e: React.MouseEvent, node: FileNode | null) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      node,
+    });
+  };
+
+  const handleNewFile = async () => {
+    if (!showNewFileDialog) return;
+    if (!dialogValue.trim()) {
+      setShowNewFileDialog(null);
+      setDialogValue('');
+      return;
+    }
+
+    try {
+      const filePath = `${showNewFileDialog}/${dialogValue}`;
+      await window.electron.fileCreate(filePath);
+      await loadFileTree();
+      setShowNewFileDialog(null);
+      setDialogValue('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create file');
+    }
+  };
+
+  const handleNewFolder = async () => {
+    if (!showNewFolderDialog) return;
+    if (!dialogValue.trim()) {
+      setShowNewFolderDialog(null);
+      setDialogValue('');
+      return;
+    }
+
+    try {
+      const folderPath = `${showNewFolderDialog}/${dialogValue}`;
+      await window.electron.folderCreate(folderPath);
+      await loadFileTree();
+      setShowNewFolderDialog(null);
+      setDialogValue('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create folder');
+    }
+  };
+
+  const handleRename = async () => {
+    if (!showRenameDialog) return;
+    if (!dialogValue.trim()) {
+      setShowRenameDialog(null);
+      setDialogValue('');
+      return;
+    }
+
+    try {
+      const oldPath = showRenameDialog.path;
+      const parentPath = oldPath.substring(0, oldPath.lastIndexOf('/'));
+      const newPath = `${parentPath}/${dialogValue}`;
+
+      if (showRenameDialog.type === 'file') {
+        await window.electron.fileRename(oldPath, newPath);
+      } else {
+        await window.electron.folderRename(oldPath, newPath);
+      }
+
+      await loadFileTree();
+      setShowRenameDialog(null);
+      setDialogValue('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to rename');
+    }
+  };
+
+  const handleDelete = async (node: FileNode) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${node.name}"?${
+        node.type === 'folder' ? ' This will delete all contents.' : ''
+      }`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      if (node.type === 'file') {
+        await window.electron.fileDelete(node.path);
+      } else {
+        await window.electron.folderDelete(node.path);
+      }
+      await loadFileTree();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete');
+    }
+  };
+
   // Filter files based on search query
   const filteredNodes = useMemo(() => {
     if (!fileTree || !searchQuery.trim()) {
@@ -156,6 +270,7 @@ export function FileBrowser({
             className="file-tree-item folder"
             style={{ paddingLeft: `${depth * 16 + 8}px` }}
             onClick={() => toggleFolder(node.path)}
+            onContextMenu={(e) => handleContextMenu(e, node)}
           >
             <span className="folder-icon">{isExpanded ? '▼' : '▶'}</span>
             <span className="folder-name">{node.name}</span>
@@ -182,6 +297,7 @@ export function FileBrowser({
         className="file-tree-item file"
         style={{ paddingLeft: `${depth * 16 + 24}px` }}
         onClick={() => handleFileClick(node.path)}
+        onContextMenu={(e) => handleContextMenu(e, node)}
       >
         <span className={`file-icon ${isSql ? 'sql' : ''}`}>📄</span>
         <span className="file-name">{node.name}</span>
@@ -248,7 +364,10 @@ export function FileBrowser({
               {isLoading ? (
                 <div className="loading">Loading files...</div>
               ) : (
-                <div className="file-tree">
+                <div
+                  className="file-tree"
+                  onContextMenu={(e) => handleContextMenu(e, null)}
+                >
                   {filteredNodes.length === 0 ? (
                     <div className="empty-results">
                       {searchQuery ? 'No files found' : 'No files in workspace'}
@@ -271,6 +390,187 @@ export function FileBrowser({
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          className="context-menu"
+          style={{
+            position: 'fixed',
+            top: `${contextMenu.y}px`,
+            left: `${contextMenu.x}px`,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {contextMenu.node?.type === 'folder' && (
+            <>
+              <button
+                onClick={() => {
+                  setShowNewFileDialog(contextMenu.node!.path);
+                  setDialogValue('');
+                  setContextMenu(null);
+                }}
+              >
+                New File
+              </button>
+              <button
+                onClick={() => {
+                  setShowNewFolderDialog(contextMenu.node!.path);
+                  setDialogValue('');
+                  setContextMenu(null);
+                }}
+              >
+                New Folder
+              </button>
+            </>
+          )}
+          {!contextMenu.node && workspace && (
+            <>
+              <button
+                onClick={() => {
+                  setShowNewFileDialog(workspace);
+                  setDialogValue('');
+                  setContextMenu(null);
+                }}
+              >
+                New File
+              </button>
+              <button
+                onClick={() => {
+                  setShowNewFolderDialog(workspace);
+                  setDialogValue('');
+                  setContextMenu(null);
+                }}
+              >
+                New Folder
+              </button>
+            </>
+          )}
+          {contextMenu.node && (
+            <>
+              <button
+                onClick={() => {
+                  setShowRenameDialog(contextMenu.node!);
+                  setDialogValue(contextMenu.node!.name);
+                  setContextMenu(null);
+                }}
+              >
+                Rename
+              </button>
+              <button
+                onClick={() => {
+                  handleDelete(contextMenu.node!);
+                  setContextMenu(null);
+                }}
+                className="danger"
+              >
+                Delete
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Rename Dialog */}
+      {showRenameDialog && (
+        <div className="dialog-overlay">
+          <div className="dialog-box">
+            <h3>Rename {showRenameDialog.type === 'file' ? 'File' : 'Folder'}</h3>
+            <input
+              type="text"
+              value={dialogValue}
+              onChange={(e) => setDialogValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleRename();
+                if (e.key === 'Escape') {
+                  setShowRenameDialog(null);
+                  setDialogValue('');
+                }
+              }}
+              autoFocus
+            />
+            <div className="dialog-buttons">
+              <button onClick={() => {
+                setShowRenameDialog(null);
+                setDialogValue('');
+              }}>
+                Cancel
+              </button>
+              <button onClick={handleRename} className="primary">
+                Rename
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New File Dialog */}
+      {showNewFileDialog && (
+        <div className="dialog-overlay">
+          <div className="dialog-box">
+            <h3>New File</h3>
+            <input
+              type="text"
+              placeholder="filename.sql"
+              value={dialogValue}
+              onChange={(e) => setDialogValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleNewFile();
+                if (e.key === 'Escape') {
+                  setShowNewFileDialog(null);
+                  setDialogValue('');
+                }
+              }}
+              autoFocus
+            />
+            <div className="dialog-buttons">
+              <button onClick={() => {
+                setShowNewFileDialog(null);
+                setDialogValue('');
+              }}>
+                Cancel
+              </button>
+              <button onClick={handleNewFile} className="primary">
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Folder Dialog */}
+      {showNewFolderDialog && (
+        <div className="dialog-overlay">
+          <div className="dialog-box">
+            <h3>New Folder</h3>
+            <input
+              type="text"
+              placeholder="folder-name"
+              value={dialogValue}
+              onChange={(e) => setDialogValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleNewFolder();
+                if (e.key === 'Escape') {
+                  setShowNewFolderDialog(null);
+                  setDialogValue('');
+                }
+              }}
+              autoFocus
+            />
+            <div className="dialog-buttons">
+              <button onClick={() => {
+                setShowNewFolderDialog(null);
+                setDialogValue('');
+              }}>
+                Cancel
+              </button>
+              <button onClick={handleNewFolder} className="primary">
+                Create
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
