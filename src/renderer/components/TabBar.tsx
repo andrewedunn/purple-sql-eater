@@ -9,6 +9,9 @@ export interface Tab {
   title: string;
   sql: string;
   results: any | null;
+  filePath?: string;
+  isDirty?: boolean;
+  isUntitled?: boolean;
 }
 
 interface TabBarProps {
@@ -74,6 +77,7 @@ export function TabBar({
                 className="tab-title"
                 onDoubleClick={() => handleDoubleClick(tab)}
               >
+                {tab.isDirty && <span className="tab-dirty">•</span>}
                 {tab.title}
               </span>
             )}

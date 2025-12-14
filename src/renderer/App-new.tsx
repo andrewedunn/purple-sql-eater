@@ -22,9 +22,11 @@ function App() {
   const [tabs, setTabs] = useState<Tab[]>([
     {
       id: '1',
-      title: 'Query 1',
-      sql: '-- Write your SQL query here\nSELECT 1 as test',
+      title: 'Untitled 1',
+      sql: '-- Write your SQL query here\n',
       results: null,
+      isUntitled: true,
+      isDirty: false,
     },
   ]);
   const [activeTabId, setActiveTabId] = useState('1');
@@ -70,6 +72,14 @@ function App() {
       if ((e.metaKey || e.ctrlKey) && e.key === 't') {
         e.preventDefault();
         handleNewTab();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          handleFileSaveAs(activeTabId);
+        } else {
+          handleFileSave(activeTabId);
+        }
       }
     };
 
@@ -157,7 +167,7 @@ function App() {
 
   const handleSqlChange = (sql: string) => {
     setTabs(tabs.map((tab) =>
-      tab.id === activeTabId ? { ...tab, sql } : tab
+      tab.id === activeTabId ? { ...tab, sql, isDirty: true } : tab
     ));
   };
 
@@ -165,9 +175,11 @@ function App() {
     const newId = Date.now().toString();
     const newTab: Tab = {
       id: newId,
-      title: `Query ${tabs.length + 1}`,
+      title: `Untitled ${tabs.length + 1}`,
       sql: '-- Write your SQL query here\n',
       results: null,
+      isUntitled: true,
+      isDirty: false,
     };
     setTabs([...tabs, newTab]);
     setActiveTabId(newId);
@@ -175,6 +187,14 @@ function App() {
 
   const handleCloseTab = (tabId: string) => {
     if (tabs.length === 1) return;
+
+    const tab = tabs.find((t) => t.id === tabId);
+    if (tab?.isDirty) {
+      const confirmed = window.confirm(
+        `"${tab.title}" has unsaved changes. Close anyway?`
+      );
+      if (!confirmed) return;
+    }
 
     const tabIndex = tabs.findIndex((t) => t.id === tabId);
     const newTabs = tabs.filter((t) => t.id !== tabId);
@@ -247,6 +267,106 @@ function App() {
 
     editor.focus();
   };
+
+  const handleFileSave = async (tabId: string) => {
+    const tab = tabs.find((t) => t.id === tabId);
+    if (!tab) return;
+
+    if (tab.isUntitled || !tab.filePath) {
+      await handleFileSaveAs(tabId);
+      return;
+    }
+
+    try {
+      await window.electron.fileWrite(tab.filePath, tab.sql);
+      setTabs(tabs.map((t) => (t.id === tabId ? { ...t, isDirty: false } : t)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save file');
+    }
+  };
+
+  const handleFileSaveAs = async (tabId: string) => {
+    const tab = tabs.find((t) => t.id === tabId);
+    if (!tab) return;
+
+    try {
+      const filePath = await window.electron.fileSaveDialog();
+      if (!filePath) return;
+
+      await window.electron.fileWrite(filePath, tab.sql);
+      const fileName = filePath.split('/').pop() || 'Untitled';
+
+      setTabs(
+        tabs.map((t) =>
+          t.id === tabId
+            ? { ...t, title: fileName, filePath, isDirty: false, isUntitled: false }
+            : t
+        )
+      );
+
+      await window.electron.recentFilesAdd(filePath);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save file');
+    }
+  };
+
+  const handleFileOpen = async (filePath: string) => {
+    try {
+      // Check if file is already open
+      const existingTab = tabs.find((t) => t.filePath === filePath);
+      if (existingTab) {
+        setActiveTabId(existingTab.id);
+        return;
+      }
+
+      // Read file content
+      const content = await window.electron.fileRead(filePath);
+      const fileName = filePath.split('/').pop() || 'Untitled';
+
+      // Replace current tab if it's untitled and empty
+      if (activeTab.isUntitled && !activeTab.isDirty && activeTab.sql === '-- Write your SQL query here\n') {
+        setTabs(
+          tabs.map((tab) =>
+            tab.id === activeTabId
+              ? { ...tab, title: fileName, sql: content, filePath, isUntitled: false, isDirty: false }
+              : tab
+          )
+        );
+      } else {
+        // Create new tab
+        const newId = Date.now().toString();
+        const newTab: Tab = {
+          id: newId,
+          title: fileName,
+          sql: content,
+          results: null,
+          filePath,
+          isUntitled: false,
+          isDirty: false,
+        };
+        setTabs([...tabs, newTab]);
+        setActiveTabId(newId);
+      }
+
+      await window.electron.recentFilesAdd(filePath);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to open file');
+    }
+  };
+
+  // Warn before closing window with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const hasDirtyTabs = tabs.some((t) => t.isDirty);
+      if (hasDirtyTabs) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [tabs]);
 
   return (
     <div className="app">

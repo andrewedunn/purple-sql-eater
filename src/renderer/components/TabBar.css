@@ -86,6 +86,13 @@
   color: var(--color-error);
 }
 
+.tab-dirty {
+  color: var(--color-accent);
+  margin-right: 4px;
+  font-size: 16px;
+  line-height: 1;
+}
+
 .tab-add {
   display: flex;
   align-items: center;
