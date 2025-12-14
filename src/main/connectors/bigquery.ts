@@ -65,7 +65,39 @@ export class BigQueryConnector implements DatabaseConnector {
       options.credentials = bqConfig.credentials;
     }
 
-    this.client = new BigQuery(options);
+    try {
+      this.client = new BigQuery(options);
+
+      // Validate connection immediately with a lightweight test query
+      const testQuery = 'SELECT 1 as test';
+      const [job] = await this.client.createQueryJob({
+        query: testQuery,
+        maxResults: 1,
+      });
+      await job.getQueryResults();
+
+      console.log(`Successfully connected to BigQuery project: ${this.projectId}`);
+    } catch (err: any) {
+      this.client = null;
+      this.projectId = null;
+
+      console.error('BigQuery connection failed:', err);
+
+      // Provide specific, actionable error messages
+      if (err.code === 401 || err.code === 403) {
+        throw new Error(
+          'Authentication failed: Invalid or expired credentials. Please check your service account key or login credentials.'
+        );
+      } else if (err.message?.toLowerCase().includes('project')) {
+        throw new Error(
+          `Cannot access project "${bqConfig.projectId}". Verify the project ID is correct and you have access.`
+        );
+      } else {
+        throw new Error(
+          `Failed to connect to BigQuery: ${err.message}. Check your credentials and network connection.`
+        );
+      }
+    }
   }
 
   async disconnect(): Promise<void> {
@@ -153,9 +185,19 @@ export class BigQueryConnector implements DatabaseConnector {
         } catch (err: any) {
           console.error(`Failed to fetch tables for dataset ${dataset.id}:`, err);
 
-          // Check for fatal errors that should stop the whole process
-          if (err.code === 401 || err.code === 403 || err.message?.includes('auth')) {
-            throw new Error(`Authentication failed while loading schema: ${err.message}`);
+          // Authentication and authorization errors should stop immediately
+          const authErrorCodes = [401, 403, 429];
+          const isAuthError = authErrorCodes.includes(err.code) ||
+                             err.message?.toLowerCase().includes('auth') ||
+                             err.message?.toLowerCase().includes('permission') ||
+                             err.message?.toLowerCase().includes('credential');
+
+          if (isAuthError) {
+            console.error(`CRITICAL: Authentication/authorization failure in dataset ${dataset.id}: ${err.message}`);
+            throw new Error(
+              `Authentication failed while loading schema for dataset "${dataset.id}". ` +
+              `Please check your credentials and permissions. Error: ${err.message}`
+            );
           }
 
           // Track per-dataset errors
@@ -167,9 +209,27 @@ export class BigQueryConnector implements DatabaseConnector {
     );
     console.timeEnd('BigQuery: Get all tables (parallel with progress)');
 
-    // Warn if too many datasets failed
-    if (failedDatasets.length > datasets.length / 2) {
-      console.warn(`Failed to load ${failedDatasets.length}/${datasets.length} datasets. Connection may be unstable.`);
+    // Surface dataset failures to users
+    if (failedDatasets.length > 0) {
+      const errorSummary = failedDatasets.slice(0, 5).map(f =>
+        `  - ${f.dataset}: ${f.error}`
+      ).join('\n');
+
+      const moreCount = failedDatasets.length - 5;
+      const moreText = moreCount > 0 ? `\n  ...and ${moreCount} more` : '';
+
+      console.warn(
+        `Failed to load ${failedDatasets.length}/${datasets.length} datasets:\n${errorSummary}${moreText}`
+      );
+
+      // If more than half failed, throw error
+      if (failedDatasets.length > datasets.length / 2) {
+        throw new Error(
+          `Failed to load ${failedDatasets.length} out of ${datasets.length} datasets. ` +
+          `Connection may be unstable or you may lack permissions.\n\n` +
+          `First few errors:\n${errorSummary}${moreText}`
+        );
+      }
     }
 
     console.log(`Total tables: ${tables.length}`);
@@ -234,10 +294,17 @@ export class BigQueryConnector implements DatabaseConnector {
         type: field.type,
         nullable: field.mode !== 'REQUIRED',
       })) || [];
-    } catch (err) {
-      // If metadata fetch fails (e.g., table deleted), return empty array
+    } catch (err: any) {
       console.error(`Failed to fetch columns for ${tableName}:`, err);
-      return [];
+
+      // Throw instead of returning empty array - let caller handle
+      if (err.code === 404) {
+        throw new Error(`Table ${tableName} not found or was deleted`);
+      } else if (err.code === 403) {
+        throw new Error(`Permission denied: Cannot access table ${tableName}`);
+      } else {
+        throw new Error(`Failed to load columns for ${tableName}: ${err.message}`);
+      }
     }
   }
 }

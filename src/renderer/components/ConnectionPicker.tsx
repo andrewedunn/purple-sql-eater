@@ -1,25 +1,22 @@
 // ABOUTME: Connection picker and manager for saved database connections.
-// ABOUTME: Stores connections in localStorage and provides UI for selection and management.
+// ABOUTME: Uses secure storage in main process via IPC for credential encryption.
 
 import { useState, useEffect } from 'react';
-import type { ConnectionConfig } from '../../shared/types';
 import './ConnectionPicker.css';
 
-export interface SavedConnection {
+export interface ConnectionListItem {
   id: string;
   name: string;
-  config: ConnectionConfig;
+  type: string;
 }
 
 interface ConnectionPickerProps {
-  onConnect: (connection: SavedConnection) => void;
+  onConnect: (connectionId: string, connectionName: string) => void;
   onDisconnect: () => void;
   isConnected: boolean;
-  currentConnection: SavedConnection | null;
+  currentConnection: ConnectionListItem | null;
   onShowConnectionDialog: () => void;
 }
-
-const STORAGE_KEY = 'purple-sql-eater-connections';
 
 export function ConnectionPicker({
   onConnect,
@@ -28,52 +25,45 @@ export function ConnectionPicker({
   currentConnection,
   onShowConnectionDialog,
 }: ConnectionPickerProps) {
-  const [connections, setConnections] = useState<SavedConnection[]>([]);
+  const [connections, setConnections] = useState<ConnectionListItem[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
 
   useEffect(() => {
     loadConnections();
   }, []);
 
-  const loadConnections = () => {
+  const loadConnections = async () => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        setConnections(JSON.parse(stored));
-      }
-    } catch (error) {
-      console.error('Failed to load connections:', error);
-    }
-  };
-
-  const saveConnections = (conns: SavedConnection[]) => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(conns));
+      const conns = await window.electron.connectionsLoadList();
       setConnections(conns);
     } catch (error: any) {
-      console.error('Failed to save connections:', error);
-
-      // Show user-facing error
-      if (error.name === 'QuotaExceededError') {
-        alert('Cannot save connection: Browser storage is full. Please clear some data.');
-      } else {
-        alert('Failed to save connection. Changes may not persist.');
-      }
+      console.error('Failed to load connections:', error);
+      alert(`Failed to load connections: ${error.message}`);
     }
   };
 
-  const handleSelectConnection = (connection: SavedConnection) => {
-    onConnect(connection);
-    setShowDropdown(false);
+  const handleSelectConnection = async (connection: ConnectionListItem) => {
+    try {
+      await onConnect(connection.id, connection.name);
+      setShowDropdown(false);
+    } catch (error: any) {
+      console.error('Failed to connect:', error);
+      alert(`Failed to connect: ${error.message}`);
+    }
   };
 
-  const handleDeleteConnection = (id: string, e: React.MouseEvent) => {
+  const handleDeleteConnection = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (confirm('Delete this connection?')) {
-      const updated = connections.filter((c) => c.id !== id);
-      saveConnections(updated);
-      if (currentConnection?.id === id) {
-        onDisconnect();
+      try {
+        await window.electron.connectionsDelete(id);
+        await loadConnections(); // Reload list
+        if (currentConnection?.id === id) {
+          onDisconnect();
+        }
+      } catch (error: any) {
+        console.error('Failed to delete connection:', error);
+        alert(`Failed to delete connection: ${error.message}`);
       }
     }
   };
@@ -154,30 +144,4 @@ export function ConnectionPicker({
       )}
     </div>
   );
-}
-
-export function saveConnection(connection: SavedConnection) {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    const connections: SavedConnection[] = stored ? JSON.parse(stored) : [];
-
-    const existingIndex = connections.findIndex((c) => c.id === connection.id);
-    if (existingIndex >= 0) {
-      connections[existingIndex] = connection;
-    } else {
-      connections.push(connection);
-    }
-
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(connections));
-  } catch (error: any) {
-    console.error('Failed to save connection:', error);
-
-    // Show user-facing error
-    if (error.name === 'QuotaExceededError') {
-      alert('Cannot save connection: Browser storage is full. Please clear some data.');
-    } else {
-      alert('Failed to save connection. Changes may not persist.');
-    }
-    throw error; // Re-throw so caller knows it failed
-  }
 }

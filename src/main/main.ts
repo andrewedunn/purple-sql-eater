@@ -8,6 +8,7 @@ import { BigQueryConnector } from './connectors/bigquery';
 import { FileSystemService } from './services/FileSystemService';
 import { WorkspaceService } from './services/WorkspaceService';
 import { FileWatcherService } from './services/FileWatcherService';
+import { SecureConnectionStorage } from './services/SecureConnectionStorage';
 
 let mainWindow: BrowserWindow | null = null;
 let connector: DatabaseConnector | null = null;
@@ -16,6 +17,7 @@ let connector: DatabaseConnector | null = null;
 const fileSystemService = new FileSystemService();
 const workspaceService = new WorkspaceService(fileSystemService);
 const fileWatcherService = new FileWatcherService();
+const connectionStorage = new SecureConnectionStorage();
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -57,17 +59,71 @@ app.on('activate', () => {
   }
 });
 
-// Helper to wrap IPC handlers with error logging
+// Helper to validate file paths from renderer
+function validateFilePath(filePath: unknown): asserts filePath is string {
+  if (!filePath || typeof filePath !== 'string') {
+    throw new Error('Invalid file path: path must be a non-empty string');
+  }
+
+  if (filePath.includes('\0')) {
+    throw new Error('Invalid file path: null bytes not allowed');
+  }
+
+  if (filePath.length > 4096) {
+    throw new Error('Invalid file path: path too long (max 4096 characters)');
+  }
+}
+
+// Sanitize sensitive data from logs
+function sanitizeArgs(channel: string, args: any[]): any[] {
+  // Don't log credentials or sensitive connection data
+  if (channel === 'connect') {
+    return ['<connection config redacted>'];
+  }
+  // Truncate long content
+  if (channel === 'file-write' && args[2]?.length > 100) {
+    return [args[1], `<content: ${args[2].length} bytes>`];
+  }
+  if (channel === 'file-create' && args[2]?.length > 100) {
+    return [args[1], `<content: ${args[2].length} bytes>`];
+  }
+  return args.slice(1); // Remove _event argument
+}
+
+// Helper to wrap IPC handlers with comprehensive error logging
 function handleIPC<T extends (...args: any[]) => any>(
   channel: string,
   handler: T
 ): void {
   ipcMain.handle(channel, async (...args) => {
+    const startTime = Date.now();
     try {
-      return await handler(...args);
-    } catch (err) {
-      console.error(`IPC handler '${channel}' failed:`, err);
-      throw err; // Re-throw for client
+      const result = await handler(...args);
+      const duration = Date.now() - startTime;
+
+      // Log slow operations for performance monitoring
+      if (duration > 1000) {
+        console.warn(`IPC handler '${channel}' completed slowly: ${duration}ms`);
+      }
+
+      return result;
+    } catch (err: any) {
+      const duration = Date.now() - startTime;
+
+      // Comprehensive error logging for debugging
+      console.error(`IPC handler '${channel}' failed after ${duration}ms:`, {
+        error: err.message,
+        code: err.code,
+        args: sanitizeArgs(channel, args),
+        timestamp: new Date().toISOString(),
+      });
+
+      // Re-throw with enhanced message for client
+      const enhancedError = new Error(
+        `Operation '${channel}' failed: ${err.message}`
+      );
+      (enhancedError as any).code = err.code;
+      throw enhancedError;
     }
   });
 }
@@ -123,6 +179,7 @@ handleIPC('workspace-select', async () => {
 });
 
 handleIPC('workspace-set', async (_event, folderPath: string) => {
+  validateFilePath(folderPath);
   await workspaceService.setWorkspaceFolder(folderPath);
 });
 
@@ -131,42 +188,54 @@ handleIPC('workspace-get', async () => {
 });
 
 handleIPC('workspace-get-tree', async (_event, dirPath: string) => {
+  validateFilePath(dirPath);
   return await workspaceService.getDirectoryTree(dirPath);
 });
 
 handleIPC('file-read', async (_event, filePath: string) => {
+  validateFilePath(filePath);
   return await fileSystemService.readFile(filePath);
 });
 
 handleIPC('file-write', async (_event, filePath: string, content: string) => {
+  validateFilePath(filePath);
   await fileSystemService.writeFile(filePath, content);
 });
 
 handleIPC('file-create', async (_event, filePath: string, content?: string) => {
+  validateFilePath(filePath);
   await fileSystemService.createFile(filePath, content || '');
 });
 
 handleIPC('file-delete', async (_event, filePath: string) => {
+  validateFilePath(filePath);
   await fileSystemService.deleteFile(filePath);
 });
 
 handleIPC('file-rename', async (_event, oldPath: string, newPath: string) => {
+  validateFilePath(oldPath);
+  validateFilePath(newPath);
   await fileSystemService.renameFile(oldPath, newPath);
 });
 
 handleIPC('folder-create', async (_event, folderPath: string) => {
+  validateFilePath(folderPath);
   await fileSystemService.createFolder(folderPath);
 });
 
 handleIPC('folder-delete', async (_event, folderPath: string) => {
+  validateFilePath(folderPath);
   await fileSystemService.deleteFolder(folderPath);
 });
 
 handleIPC('folder-rename', async (_event, oldPath: string, newPath: string) => {
+  validateFilePath(oldPath);
+  validateFilePath(newPath);
   await fileSystemService.renameFolder(oldPath, newPath);
 });
 
 handleIPC('folder-list', async (_event, dirPath: string) => {
+  validateFilePath(dirPath);
   return await fileSystemService.listDirectory(dirPath);
 });
 
@@ -188,6 +257,7 @@ handleIPC('file-save-dialog', async () => {
 });
 
 handleIPC('recent-files-add', async (_event, filePath: string) => {
+  validateFilePath(filePath);
   workspaceService.addRecentFile(filePath);
 });
 
@@ -197,9 +267,50 @@ handleIPC('recent-files-get', async () => {
 
 // File watching IPC handlers
 handleIPC('file-watch', async (_event, filePath: string) => {
+  validateFilePath(filePath);
   await fileWatcherService.watchFile(filePath);
 });
 
 handleIPC('file-unwatch', async (_event, filePath: string) => {
+  validateFilePath(filePath);
   fileWatcherService.unwatchFile(filePath);
+});
+
+// Secure connection storage IPC handlers
+handleIPC('connections-load-list', async () => {
+  const connections = await connectionStorage.loadConnections();
+  // Return only safe fields for display (no passwords/credentials)
+  return connections.map(conn => ({
+    id: conn.id,
+    name: conn.name,
+    type: conn.config.type,
+  }));
+});
+
+handleIPC('connections-save', async (_event, connection: any) => {
+  await connectionStorage.saveConnection(connection);
+});
+
+handleIPC('connections-delete', async (_event, id: string) => {
+  await connectionStorage.deleteConnection(id);
+});
+
+handleIPC('connections-get', async (_event, id: string) => {
+  return await connectionStorage.getConnection(id);
+});
+
+handleIPC('connections-connect', async (_event, id: string) => {
+  const connection = await connectionStorage.getConnection(id);
+  if (!connection) {
+    throw new Error('Connection not found');
+  }
+
+  if (connection.config.type === 'bigquery') {
+    connector = new BigQueryConnector();
+    await connector.connect(connection.config);
+  } else {
+    throw new Error(`Unsupported database type: ${connection.config.type}`);
+  }
+
+  return connection;
 });

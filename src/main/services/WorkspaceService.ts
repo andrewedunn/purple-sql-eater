@@ -15,27 +15,50 @@ export class WorkspaceService {
   constructor(fileSystem: FileSystemService) {
     this.fileSystem = fileSystem;
     this.settingsPath = path.join(app.getPath('userData'), 'workspace-settings.json');
-    this.loadSettings();
+    // Don't await - let it load asynchronously
+    this.loadSettings().catch(err => {
+      console.error('Failed to load workspace settings:', err);
+    });
   }
 
   private async loadSettings(): Promise<void> {
     try {
       const data = await fs.readFile(this.settingsPath, 'utf-8');
       this.settings = JSON.parse(data);
+
+      // Set workspace root on FileSystemService if we have a saved workspace
+      if (this.settings?.path) {
+        this.fileSystem.setWorkspaceRoot(this.settings.path);
+      }
     } catch (err: any) {
       if (err.code === 'ENOENT') {
         // Expected: no settings file yet
         this.settings = null;
       } else if (err instanceof SyntaxError) {
-        console.error('Workspace settings file is corrupted. Resetting to defaults.', err);
-        this.settings = null;
-        // Optionally back up the corrupted file
+        console.error('CRITICAL: Workspace settings file is corrupted:', err);
+
+        // Back up the corrupted file for recovery
+        const backupPath = `${this.settingsPath}.corrupted-${Date.now()}`;
         try {
-          await fs.rename(this.settingsPath, `${this.settingsPath}.corrupted`);
-        } catch {}
+          await fs.rename(this.settingsPath, backupPath);
+          console.log(`Corrupted settings backed up to: ${backupPath}`);
+        } catch (backupErr) {
+          console.error('Failed to backup corrupted settings:', backupErr);
+        }
+
+        this.settings = null;
+
+        // Throw error to surface to user
+        throw new Error(
+          'Your workspace settings were corrupted and have been reset. ' +
+          `A backup was saved to: ${backupPath}`
+        );
       } else {
         console.error('Failed to load workspace settings:', err);
-        this.settings = null;
+        throw new Error(
+          `Cannot load workspace settings: ${err.message}. ` +
+          'Your workspace configuration may not be available.'
+        );
       }
     }
   }

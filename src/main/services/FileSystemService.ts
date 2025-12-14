@@ -24,19 +24,36 @@ export class FileSystemService {
     this.workspaceRoot = path.resolve(rootPath);
   }
 
+  private sanitizePathForUser(filePath: string): string {
+    if (!this.workspaceRoot) return path.basename(filePath);
+
+    const relativePath = path.relative(this.workspaceRoot, filePath);
+    if (relativePath.startsWith('..')) {
+      return '<path outside workspace>';
+    }
+    return relativePath;
+  }
+
   private validatePath(filePath: string): void {
     if (!this.workspaceRoot) {
-      // No workspace set - allow all paths (backward compatibility)
-      return;
+      throw new FileSystemError(
+        'Cannot perform file operations: No workspace folder selected. Please select a workspace first.',
+        'EWORKSPACE',
+        filePath,
+        'validate'
+      );
     }
 
     const resolvedPath = path.resolve(filePath);
-    const relativePath = path.relative(this.workspaceRoot, resolvedPath);
+    const resolvedWorkspace = path.resolve(this.workspaceRoot);
 
-    // Check if path escapes workspace using path traversal
-    if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    // Ensure path is within workspace by checking if it starts with workspace path
+    // Using startsWith with path separator ensures we don't match partial directory names
+    if (!resolvedPath.startsWith(resolvedWorkspace + path.sep) &&
+        resolvedPath !== resolvedWorkspace) {
+      console.error(`SECURITY: Path traversal attempt blocked: ${filePath} escapes workspace ${this.workspaceRoot}`);
       throw new FileSystemError(
-        `Access denied: Path outside workspace`,
+        'Access denied: Cannot access files outside workspace folder',
         'EACCES',
         filePath,
         'validate'
@@ -51,14 +68,14 @@ export class FileSystemService {
     } catch (err: any) {
       if (err.code === 'ENOENT') {
         throw new FileSystemError(
-          `File not found: ${filePath}`,
+          `File not found: ${this.sanitizePathForUser(filePath)}`,
           'ENOENT',
           filePath,
           'read'
         );
       } else if (err.code === 'EACCES') {
         throw new FileSystemError(
-          `Permission denied: ${filePath}`,
+          `Permission denied: ${this.sanitizePathForUser(filePath)}`,
           'EACCES',
           filePath,
           'read'
@@ -80,14 +97,14 @@ export class FileSystemService {
     } catch (err: any) {
       if (err.code === 'ENOENT') {
         throw new FileSystemError(
-          `Directory not found: ${path.dirname(filePath)}`,
+          `Directory not found: ${this.sanitizePathForUser(path.dirname(filePath))}`,
           'ENOENT',
           filePath,
           'write'
         );
       } else if (err.code === 'EACCES') {
         throw new FileSystemError(
-          `Permission denied: ${filePath}`,
+          `Permission denied: ${this.sanitizePathForUser(filePath)}`,
           'EACCES',
           filePath,
           'write'
@@ -116,7 +133,7 @@ export class FileSystemService {
     } catch (err: any) {
       if (err.code === 'EEXIST') {
         throw new FileSystemError(
-          `File already exists: ${filePath}`,
+          `File already exists: ${this.sanitizePathForUser(filePath)}`,
           'EEXIST',
           filePath,
           'create'
@@ -138,7 +155,7 @@ export class FileSystemService {
     } catch (err: any) {
       if (err.code === 'ENOENT') {
         throw new FileSystemError(
-          `File not found: ${filePath}`,
+          `File not found: ${this.sanitizePathForUser(filePath)}`,
           'ENOENT',
           filePath,
           'delete'
@@ -161,14 +178,14 @@ export class FileSystemService {
     } catch (err: any) {
       if (err.code === 'ENOENT') {
         throw new FileSystemError(
-          `File not found: ${oldPath}`,
+          `File not found: ${this.sanitizePathForUser(oldPath)}`,
           'ENOENT',
           oldPath,
           'rename'
         );
       } else if (err.code === 'EEXIST') {
         throw new FileSystemError(
-          `Target already exists: ${newPath}`,
+          `Target already exists: ${this.sanitizePathForUser(newPath)}`,
           'EEXIST',
           newPath,
           'rename'
@@ -204,7 +221,7 @@ export class FileSystemService {
     } catch (err: any) {
       if (err.code === 'ENOENT') {
         throw new FileSystemError(
-          `Folder not found: ${folderPath}`,
+          `Folder not found: ${this.sanitizePathForUser(folderPath)}`,
           'ENOENT',
           folderPath,
           'delete-folder'
@@ -227,7 +244,7 @@ export class FileSystemService {
     } catch (err: any) {
       if (err.code === 'ENOENT') {
         throw new FileSystemError(
-          `Folder not found: ${oldPath}`,
+          `Folder not found: ${this.sanitizePathForUser(oldPath)}`,
           'ENOENT',
           oldPath,
           'rename-folder'
@@ -235,7 +252,7 @@ export class FileSystemService {
       } else if (err.code === 'ENOTEMPTY') {
         // This shouldn't happen with rename, but handle it anyway
         throw new FileSystemError(
-          `Target folder not empty: ${newPath}`,
+          `Target folder not empty: ${this.sanitizePathForUser(newPath)}`,
           'ENOTEMPTY',
           newPath,
           'rename-folder'
@@ -282,14 +299,14 @@ export class FileSystemService {
     } catch (err: any) {
       if (err.code === 'ENOENT') {
         throw new FileSystemError(
-          `Directory not found: ${dirPath}`,
+          `Directory not found: ${this.sanitizePathForUser(dirPath)}`,
           'ENOENT',
           dirPath,
           'list'
         );
       } else if (err.code === 'EACCES') {
         throw new FileSystemError(
-          `Permission denied: ${dirPath}`,
+          `Permission denied: ${this.sanitizePathForUser(dirPath)}`,
           'EACCES',
           dirPath,
           'list'

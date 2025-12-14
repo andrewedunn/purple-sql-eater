@@ -78,6 +78,22 @@ contextBridge.exposeInMainWorld('electron', {
   fileUnwatch: (filePath: string): Promise<void> =>
     ipcRenderer.invoke('file-unwatch', filePath),
 
+  // Secure connection storage operations
+  connectionsLoadList: (): Promise<Array<{ id: string; name: string; type: string }>> =>
+    ipcRenderer.invoke('connections-load-list'),
+
+  connectionsSave: (connection: any): Promise<void> =>
+    ipcRenderer.invoke('connections-save', connection),
+
+  connectionsDelete: (id: string): Promise<void> =>
+    ipcRenderer.invoke('connections-delete', id),
+
+  connectionsGet: (id: string): Promise<any> =>
+    ipcRenderer.invoke('connections-get', id),
+
+  connectionsConnect: (id: string): Promise<any> =>
+    ipcRenderer.invoke('connections-connect', id),
+
   ipcRenderer: {
     on: (channel: string, func: (...args: any[]) => void) => {
       ipcRenderer.on(channel, func);
@@ -117,6 +133,13 @@ declare global {
       recentFilesGet: () => Promise<string[]>;
       fileWatch: (filePath: string) => Promise<void>;
       fileUnwatch: (filePath: string) => Promise<void>;
+
+      // Secure connection storage operations
+      connectionsLoadList: () => Promise<Array<{ id: string; name: string; type: string }>>;
+      connectionsSave: (connection: any) => Promise<void>;
+      connectionsDelete: (id: string) => Promise<void>;
+      connectionsGet: (id: string) => Promise<any>;
+      connectionsConnect: (id: string) => Promise<any>;
 
       ipcRenderer?: {
         on: (channel: string, func: (...args: any[]) => void) => void;

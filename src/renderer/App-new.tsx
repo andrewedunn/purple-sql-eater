@@ -6,7 +6,7 @@ import Editor from '@monaco-editor/react';
 import type * as Monaco from 'monaco-editor';
 import type { QueryResult, ConnectionConfig } from '../shared/types';
 import { ConnectionDialog, ConnectionDialogResult } from './ConnectionDialog';
-import { ConnectionPicker, SavedConnection, saveConnection } from './components/ConnectionPicker';
+import { ConnectionPicker, ConnectionListItem } from './components/ConnectionPicker';
 import { TabBar, Tab } from './components/TabBar';
 import { SchemaBrowser } from './components/SchemaBrowser';
 import { FileBrowser } from './components/FileBrowser';
@@ -44,7 +44,7 @@ function App() {
   const [isExecuting, setIsExecuting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [currentConnection, setCurrentConnection] = useState<SavedConnection | null>(null);
+  const [currentConnection, setCurrentConnection] = useState<ConnectionListItem | null>(null);
   const [showConnectionDialog, setShowConnectionDialog] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [showSchemaBrowser, setShowSchemaBrowser] = useState(true);
@@ -129,14 +129,19 @@ function App() {
     try {
       await window.electron.connect(result.config);
 
-      const connection: SavedConnection = {
-        id: Date.now().toString(),
+      const connectionId = Date.now().toString();
+      const connection: ConnectionListItem = {
+        id: connectionId,
         name: result.name,
-        config: result.config,
+        type: result.config.type,
       };
 
       if (result.saveConnection) {
-        saveConnection(connection);
+        await window.electron.connectionsSave({
+          id: connectionId,
+          name: result.name,
+          config: result.config,
+        });
       }
 
       setCurrentConnection(connection);
@@ -147,11 +152,15 @@ function App() {
     }
   };
 
-  const handlePickerConnect = async (connection: SavedConnection) => {
+  const handlePickerConnect = async (connectionId: string, connectionName: string) => {
     setConnectionError(null);
     try {
-      await window.electron.connect(connection.config);
-      setCurrentConnection(connection);
+      const savedConnection = await window.electron.connectionsConnect(connectionId);
+      setCurrentConnection({
+        id: connectionId,
+        name: connectionName,
+        type: savedConnection.config.type,
+      });
       setIsConnected(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Connection failed');
@@ -569,6 +578,12 @@ function App() {
   }, [tabs]);
 
   // Listen for file-changed events from main process
+  // Note: Using useRef to avoid recreating handlers on every tabs change
+  const tabsRef = useRef(tabs);
+  useEffect(() => {
+    tabsRef.current = tabs;
+  }, [tabs]);
+
   useEffect(() => {
     const handleFileChanged = (_event: any, filePath: string) => {
       // Add to changed files set
@@ -576,7 +591,7 @@ function App() {
     };
 
     const handleFileDeleted = (_event: any, filePath: string) => {
-      const tab = tabs.find((t) => t.filePath === filePath);
+      const tab = tabsRef.current.find((t) => t.filePath === filePath);
       if (tab) {
         const confirmed = window.confirm(
           `"${tab.title}" was deleted externally. Close this tab?`
@@ -596,7 +611,7 @@ function App() {
         window.electron.ipcRenderer?.removeListener('file-deleted', handleFileDeleted);
       };
     }
-  }, [tabs]);
+  }, []); // Empty deps - only run on mount/unmount
 
   // Handle file reload
   const handleReloadFile = async (filePath: string) => {
