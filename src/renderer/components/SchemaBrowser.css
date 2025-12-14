@@ -23,7 +23,8 @@
 
 .schema-browser {
   width: var(--sidebar-width);
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   background-color: var(--color-surface);
   border-right: 1px solid var(--color-border);
   display: flex;
