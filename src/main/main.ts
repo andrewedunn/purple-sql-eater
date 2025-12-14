@@ -182,7 +182,7 @@ ipcMain.handle('recent-files-get', async () => {
 
 // File watching IPC handlers
 ipcMain.handle('file-watch', async (_event, filePath: string) => {
-  fileWatcherService.watchFile(filePath);
+  await fileWatcherService.watchFile(filePath);
 });
 
 ipcMain.handle('file-unwatch', async (_event, filePath: string) => {
