@@ -1,0 +1,79 @@
+/* ABOUTME: Styles for the results tabs component. */
+/* ABOUTME: Horizontal tabs with status colors for query results. */
+
+.results-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  min-height: 32px;
+}
+
+.results-tabs-list {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  flex: 1;
+}
+
+.results-tab {
+  padding: 4px 10px;
+  border: none;
+  border-left: 3px solid transparent;
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  border-radius: 2px;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.results-tab:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.results-tab.active {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+/* Status colors - subtle left border */
+.results-tab-success {
+  border-left-color: var(--color-success, #22c55e);
+}
+
+.results-tab-error {
+  border-left-color: var(--color-error, #ef4444);
+}
+
+.results-tab-empty {
+  border-left-color: var(--color-warning, #f59e0b);
+}
+
+.results-tabs-info {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  padding-left: 12px;
+  white-space: nowrap;
+}
+
+/* Keyboard shortcut hint on hover */
+.results-tab::after {
+  content: attr(data-shortcut);
+  margin-left: 6px;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.results-tab:hover::after {
+  opacity: 1;
+}

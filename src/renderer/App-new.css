@@ -53,6 +53,55 @@
   box-shadow: none;
 }
 
+/* Execute group with dropdown */
+.execute-group {
+  display: flex;
+  align-items: stretch;
+}
+
+.execute-group .btn-execute {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.execution-mode-select {
+  padding: var(--space-2) var(--space-2);
+  background-color: var(--color-accent);
+  border: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  border-top-right-radius: var(--radius-sm);
+  border-bottom-right-radius: var(--radius-sm);
+  color: white;
+  font-size: var(--font-size-xs);
+  font-family: var(--font-ui);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.execution-mode-select:hover:not(:disabled) {
+  background-color: var(--color-accent-hover);
+}
+
+.execution-mode-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.execution-mode-select option {
+  background-color: var(--color-surface);
+  color: var(--color-text);
+}
+
+.execution-status {
+  padding: var(--space-1) var(--space-3);
+  background-color: var(--color-accent-light);
+  border-radius: var(--radius-sm);
+  color: var(--color-accent);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 .results-count {
   padding: var(--space-1) var(--space-3);
   background-color: var(--color-accent-light);
@@ -287,6 +336,44 @@
   font-size: var(--font-size-sm);
   line-height: var(--line-height-relaxed);
   box-shadow: var(--shadow-sm);
+}
+
+/* Query error display in results area */
+.query-error {
+  padding: var(--space-6);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.query-error-title {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--color-error);
+}
+
+.query-error-message {
+  padding: var(--space-4);
+  background-color: var(--color-error-light);
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-md);
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+}
+
+.query-error-sql {
+  padding: var(--space-4);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: auto;
 }
 
 /* Updated dialog styles for new design system */

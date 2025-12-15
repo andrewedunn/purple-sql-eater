@@ -1,9 +1,10 @@
 // ABOUTME: Virtualized results table component for displaying large query results.
 // ABOUTME: Uses @tanstack/react-virtual for performance with thousands of rows.
 
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import type { QueryResult } from '../../shared/types';
+import type { QueryResult, ColumnFilter } from '../../shared/types';
+import { ColumnFilterMenu } from './ColumnFilterMenu';
 import './ResultsTable.css';
 
 interface ResultsTableProps {
@@ -19,6 +20,73 @@ interface SortState {
   direction: SortDirection;
 }
 
+interface SelectedCell {
+  row: number;
+  col: number;
+}
+
+// Determine if a value looks like a number
+function isNumericColumn(rows: unknown[][], columnIndex: number): boolean {
+  let numericCount = 0;
+  let totalCount = 0;
+  for (let i = 0; i < Math.min(rows.length, 100); i++) {
+    const val = rows[i][columnIndex];
+    if (val !== null && val !== undefined && val !== '') {
+      totalCount++;
+      if (typeof val === 'number' || !isNaN(Number(val))) {
+        numericCount++;
+      }
+    }
+  }
+  return totalCount > 0 && numericCount / totalCount > 0.8;
+}
+
+// Apply a single filter to a value
+function applyFilter(value: unknown, filter: ColumnFilter): boolean {
+  if (filter.operator === 'is_null') {
+    return value === null || value === undefined;
+  }
+  if (filter.operator === 'not_null') {
+    return value !== null && value !== undefined;
+  }
+
+  if (value === null || value === undefined) {
+    return false;
+  }
+
+  const stringValue = String(value).toLowerCase();
+  const filterValue = String(filter.value).toLowerCase();
+
+  switch (filter.operator) {
+    case 'contains':
+      return stringValue.includes(filterValue);
+    case 'equals':
+      if (filter.type === 'number') {
+        return Number(value) === Number(filter.value);
+      }
+      return stringValue === filterValue;
+    case 'starts':
+      return stringValue.startsWith(filterValue);
+    case 'gt':
+      return Number(value) > Number(filter.value);
+    case 'lt':
+      return Number(value) < Number(filter.value);
+    case 'range':
+      const numVal = Number(value);
+      return numVal >= Number(filter.value) && numVal <= Number(filter.value2);
+    default:
+      return true;
+  }
+}
+
+// Apply all filters to rows
+function applyFilters(rows: unknown[][], filters: ColumnFilter[]): unknown[][] {
+  if (filters.length === 0) return rows;
+  return rows.filter((row) =>
+    filters.every((filter) => applyFilter(row[filter.columnIndex], filter))
+  );
+}
+
 export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: ResultsTableProps) {
   const [sortState, setSortState] = useState<SortState>({ columnIndex: null, direction: null });
   const [columnWidths, setColumnWidths] = useState<Record<number, number>>({});
@@ -27,10 +95,16 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
   const [resizeStartWidth, setResizeStartWidth] = useState(0);
   const [currentPage, setCurrentPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(100);
+  const [columnFilters, setColumnFilters] = useState<ColumnFilter[]>([]);
+  const [filterMenuColumn, setFilterMenuColumn] = useState<number | null>(null);
+  const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
+  const [showNullHighlight, setShowNullHighlight] = useState(false);
   const dataScrollRef = useRef<HTMLDivElement>(null);
   const headersScrollRef = useRef<HTMLDivElement>(null);
   const rowNumbersScrollRef = useRef<HTMLDivElement>(null);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
 
+  // Sort rows
   const sortedRows = [...results.rows];
   if (sortState.columnIndex !== null && sortState.direction) {
     sortedRows.sort((a, b) => {
@@ -45,11 +119,15 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
     });
   }
 
-  const totalRows = sortedRows.length;
+  // Apply filters
+  const filteredRows = applyFilters(sortedRows, columnFilters);
+
+  const totalRows = filteredRows.length;
+  const unfilteredCount = results.rows.length;
   const totalPages = Math.ceil(totalRows / rowsPerPage);
   const startIndex = currentPage * rowsPerPage;
   const endIndex = Math.min(startIndex + rowsPerPage, totalRows);
-  const paginatedRows = sortedRows.slice(startIndex, endIndex);
+  const paginatedRows = filteredRows.slice(startIndex, endIndex);
 
   const rowVirtualizer = useVirtualizer({
     count: paginatedRows.length,
@@ -87,6 +165,90 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
     setResizeStartWidth(th.offsetWidth);
   };
 
+  const handleFilterClick = (e: React.MouseEvent, columnIndex: number) => {
+    e.stopPropagation();
+    setFilterMenuColumn(filterMenuColumn === columnIndex ? null : columnIndex);
+  };
+
+  const handleApplyFilter = (filter: ColumnFilter) => {
+    setColumnFilters((prev) => {
+      const existing = prev.findIndex((f) => f.columnIndex === filter.columnIndex);
+      if (existing >= 0) {
+        const updated = [...prev];
+        updated[existing] = filter;
+        return updated;
+      }
+      return [...prev, filter];
+    });
+    setCurrentPage(0); // Reset to first page when filtering
+  };
+
+  const handleClearFilter = (columnIndex: number) => {
+    setColumnFilters((prev) => prev.filter((f) => f.columnIndex !== columnIndex));
+    setCurrentPage(0);
+  };
+
+  const getFilterForColumn = (columnIndex: number): ColumnFilter | undefined => {
+    return columnFilters.find((f) => f.columnIndex === columnIndex);
+  };
+
+  // Copy cell value to clipboard
+  const copyCellValue = useCallback((row: number, col: number) => {
+    const value = paginatedRows[row]?.[col];
+    const text = value === null || value === undefined ? '' : String(value);
+    navigator.clipboard.writeText(text);
+  }, [paginatedRows]);
+
+  // Copy entire row to clipboard
+  const copyRowValue = useCallback((row: number) => {
+    const rowData = paginatedRows[row];
+    if (!rowData) return;
+    const text = rowData.map((cell) => (cell === null || cell === undefined ? '' : String(cell))).join('\t');
+    navigator.clipboard.writeText(text);
+  }, [paginatedRows]);
+
+  // Keyboard navigation
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (!selectedCell) return;
+
+    const { row, col } = selectedCell;
+    const maxRow = paginatedRows.length - 1;
+    const maxCol = results.columns.length - 1;
+
+    switch (e.key) {
+      case 'ArrowUp':
+        e.preventDefault();
+        if (row > 0) setSelectedCell({ row: row - 1, col });
+        break;
+      case 'ArrowDown':
+        e.preventDefault();
+        if (row < maxRow) setSelectedCell({ row: row + 1, col });
+        break;
+      case 'ArrowLeft':
+        e.preventDefault();
+        if (col > 0) setSelectedCell({ row, col: col - 1 });
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        if (col < maxCol) setSelectedCell({ row, col: col + 1 });
+        break;
+      case 'Enter':
+        e.preventDefault();
+        copyCellValue(row, col);
+        break;
+      case 'c':
+        if (e.metaKey || e.ctrlKey) {
+          e.preventDefault();
+          copyRowValue(row);
+        }
+        break;
+      case 'Escape':
+        setSelectedCell(null);
+        break;
+    }
+  }, [selectedCell, paginatedRows.length, results.columns.length, copyCellValue, copyRowValue]);
+
+  // Column resize effect
   useEffect(() => {
     if (resizingColumn === null) return;
 
@@ -109,6 +271,7 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
     };
   }, [resizingColumn, resizeStartX, resizeStartWidth]);
 
+  // Scroll synchronization effect
   useEffect(() => {
     const dataScroll = dataScrollRef.current;
     const headersScroll = headersScrollRef.current;
@@ -141,8 +304,51 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
     };
   }, []);
 
+  // Format cell display
+  const formatCell = (cell: unknown, isNull: boolean) => {
+    if (isNull) {
+      return showNullHighlight ? <span className="null-value">NULL</span> : '';
+    }
+    return String(cell);
+  };
+
   return (
-    <div className="results-table-container">
+    <div
+      className="results-table-container"
+      ref={tableContainerRef}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+    >
+      {/* Filter pills */}
+      {columnFilters.length > 0 && (
+        <div className="filter-pills">
+          {columnFilters.map((filter) => (
+            <div key={filter.columnIndex} className="filter-pill">
+              <span className="filter-pill-label">{filter.columnName}</span>
+              <span className="filter-pill-value">
+                {filter.operator === 'is_null' ? 'is NULL' :
+                 filter.operator === 'not_null' ? 'is not NULL' :
+                 filter.operator === 'range' ? `${filter.value} - ${filter.value2}` :
+                 `${filter.operator} ${filter.value}`}
+              </span>
+              <button
+                className="filter-pill-remove"
+                onClick={() => handleClearFilter(filter.columnIndex)}
+                title="Remove filter"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          <button
+            className="filter-clear-all"
+            onClick={() => setColumnFilters([])}
+          >
+            Clear all
+          </button>
+        </div>
+      )}
+
       <div className="table-grid">
         {/* Top-left corner */}
         <div className="header-corner">#</div>
@@ -155,21 +361,40 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
                 <tr>
                   {results.columns.map((col, idx) => {
                     const width = columnWidths[idx] || 200;
+                    const hasFilter = getFilterForColumn(idx);
                     return (
                       <th
                         key={idx}
                         onClick={() => handleSort(idx)}
-                        className="sortable"
+                        className={`sortable ${hasFilter ? 'has-filter' : ''}`}
                         title="Click to sort"
                         style={{ width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }}
                       >
                         <span className="th-content">
                           {col}{getSortIndicator(idx)}
                         </span>
+                        <button
+                          className={`filter-button ${hasFilter ? 'active' : ''}`}
+                          onClick={(e) => handleFilterClick(e, idx)}
+                          title="Filter column"
+                        >
+                          ⫶
+                        </button>
                         <span
                           className="resize-handle"
                           onMouseDown={(e) => handleResizeStart(e, idx)}
                         />
+                        {filterMenuColumn === idx && (
+                          <ColumnFilterMenu
+                            columnIndex={idx}
+                            columnName={col}
+                            columnType={isNumericColumn(results.rows, idx) ? 'number' : 'text'}
+                            currentFilter={hasFilter}
+                            onApplyFilter={handleApplyFilter}
+                            onClearFilter={() => handleClearFilter(idx)}
+                            onClose={() => setFilterMenuColumn(null)}
+                          />
+                        )}
                       </th>
                     );
                   })}
@@ -239,12 +464,16 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
                     >
                       {row.map((cell, cellIdx) => {
                         const width = columnWidths[cellIdx] || 200;
+                        const isNull = cell === null || cell === undefined;
+                        const isSelected = selectedCell?.row === virtualRow.index && selectedCell?.col === cellIdx;
                         return (
                           <td
                             key={cellIdx}
+                            className={`${isNull && showNullHighlight ? 'null-cell' : ''} ${isSelected ? 'selected' : ''}`}
                             style={{ width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }}
+                            onClick={() => setSelectedCell({ row: virtualRow.index, col: cellIdx })}
                           >
-                            {String(cell ?? '')}
+                            {formatCell(cell, isNull)}
                           </td>
                         );
                       })}
@@ -259,7 +488,12 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
 
       <div className="results-footer">
         <div className="results-info">
-          {totalRows.toLocaleString()} row{totalRows !== 1 ? 's' : ''} × {results.columns.length} column{results.columns.length !== 1 ? 's' : ''}
+          {columnFilters.length > 0 ? (
+            <span>{totalRows.toLocaleString()} of {unfilteredCount.toLocaleString()} rows (filtered)</span>
+          ) : (
+            <span>{totalRows.toLocaleString()} row{totalRows !== 1 ? 's' : ''}</span>
+          )}
+          <span> × {results.columns.length} column{results.columns.length !== 1 ? 's' : ''}</span>
           {totalPages > 1 && (
             <span className="page-info">
               {' '}· Page {currentPage + 1} of {totalPages} (showing {startIndex + 1}-{endIndex})
@@ -268,6 +502,14 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
         </div>
 
         <div className="results-controls">
+          <button
+            className={`btn-null-toggle ${showNullHighlight ? 'active' : ''}`}
+            onClick={() => setShowNullHighlight(!showNullHighlight)}
+            title="Toggle NULL visibility"
+          >
+            NULL
+          </button>
+
           <label className="rows-per-page-label">
             Rows per page:
             <select
@@ -282,7 +524,7 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
               <option value={100}>100</option>
               <option value={500}>500</option>
               <option value={1000}>1000</option>
-              <option value={totalRows}>All</option>
+              <option value={unfilteredCount}>All</option>
             </select>
           </label>
 

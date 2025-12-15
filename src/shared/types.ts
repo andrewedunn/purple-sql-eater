@@ -64,6 +64,32 @@ export interface QueryResult {
   rowCount: number;
 }
 
+// Query execution types for multi-query support
+export interface QueryError {
+  error: string;
+  query: string;
+}
+
+export interface QueryExecution {
+  queries: { sql: string; startLine: number; endLine: number }[];
+  results: (QueryResult | QueryError)[];
+  executedAt: Date;
+}
+
+export type ExecutionMode = 'selection' | 'current' | 'all';
+
+// Column filter types for results table filtering
+export type FilterOperator = 'contains' | 'equals' | 'starts' | 'gt' | 'lt' | 'range' | 'is_null' | 'not_null';
+
+export interface ColumnFilter {
+  columnIndex: number;
+  columnName: string;
+  type: 'text' | 'number';
+  operator: FilterOperator;
+  value: string | number;
+  value2?: number; // for range operator
+}
+
 export interface Schema {
   tables: Table[];
 }

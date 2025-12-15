@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 import type * as Monaco from 'monaco-editor';
-import type { QueryResult, ConnectionConfig } from '../shared/types';
+import type { QueryResult, QueryExecution, QueryError, ExecutionMode } from '../shared/types';
 import { ConnectionDialog, ConnectionDialogResult } from './ConnectionDialog';
 import { ConnectionPicker, ConnectionListItem } from './components/ConnectionPicker';
 import { TabBar, Tab } from './components/TabBar';
@@ -12,7 +12,18 @@ import { SchemaBrowser } from './components/SchemaBrowser';
 import { FileBrowser } from './components/FileBrowser';
 import { ThemeToggle } from './components/ThemeToggle';
 import { ResultsTable } from './components/ResultsTable';
+import { ResultsTabs } from './components/ResultsTabs';
 import { extractTableNames } from './utils/sqlParser';
+import { splitQueries, getQueryAtPosition, ParsedQuery } from './utils/sqlSplitter';
+import {
+  getKeywordCompletions,
+  getFunctionCompletions,
+  getTableCompletions,
+  getColumnCompletions,
+  extractTableBeforeDot,
+  getCompletionContext,
+  buildAliasMap,
+} from './utils/sqlCompletions';
 import './design-system.css';
 import './App-new.css';
 
@@ -36,10 +47,13 @@ function App() {
       title: 'Untitled 1',
       sql: '-- Write your SQL query here\n',
       results: null,
+      activeResultIndex: 0,
       isUntitled: true,
       isDirty: false,
     },
   ]);
+  const [executionMode, setExecutionMode] = useState<ExecutionMode>('current');
+  const [executionStatus, setExecutionStatus] = useState<string | null>(null);
   const [activeTabId, setActiveTabId] = useState('1');
   const [isExecuting, setIsExecuting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +94,8 @@ function App() {
   const resizeStartWidth = useRef(0);
   const resizeStartRatio = useRef(0.5);
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
+  const monacoRef = useRef<typeof Monaco | null>(null);
+  const [schemaTables, setSchemaTables] = useState<import('../shared/types').Table[]>([]);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
@@ -95,6 +111,25 @@ function App() {
   useEffect(() => {
     localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layoutConfig));
   }, [layoutConfig]);
+
+  // Fetch schema tables when connected (for autocomplete)
+  useEffect(() => {
+    if (!isConnected) {
+      setSchemaTables([]);
+      return;
+    }
+
+    const fetchSchema = async () => {
+      try {
+        const schema = await window.electron.getSchema();
+        setSchemaTables(schema.tables || []);
+      } catch (err) {
+        console.error('Failed to fetch schema for autocomplete:', err);
+      }
+    };
+
+    fetchSchema();
+  }, [isConnected, currentConnection?.id]);
 
   const toggleTheme = () => {
     setTheme(theme === 'light' ? 'dark' : 'light');
@@ -180,26 +215,107 @@ function App() {
   };
 
   const handleExecute = async () => {
-    if (!isConnected || !activeTab) return;
+    if (!isConnected || !activeTab || !editorRef.current) return;
 
     setError(null);
     setIsExecuting(true);
     setQuerySuccess(false);
+    setExecutionStatus(null);
 
     try {
-      const result = await window.electron.executeQuery(activeTab.sql);
+      const editor = editorRef.current;
+      const selection = editor.getSelection();
+      const position = editor.getPosition();
+
+      let queriesToRun: ParsedQuery[] = [];
+
+      // Determine which queries to run based on context
+      if (selection && !selection.isEmpty()) {
+        // Selection takes priority - run selected text
+        const model = editor.getModel();
+        if (model) {
+          const selectedText = model.getValueInRange(selection);
+          queriesToRun = [{
+            sql: selectedText.trim(),
+            startLine: selection.startLineNumber,
+            endLine: selection.endLineNumber,
+            startOffset: 0,
+            endOffset: selectedText.length,
+          }];
+        }
+      } else if (executionMode === 'current' && position) {
+        // Run query at cursor position
+        const query = getQueryAtPosition(activeTab.sql, position.lineNumber, position.column);
+        if (query) {
+          queriesToRun = [query];
+        }
+      } else {
+        // Run all queries
+        queriesToRun = splitQueries(activeTab.sql);
+      }
+
+      if (queriesToRun.length === 0) {
+        setError('No query to execute');
+        setIsExecuting(false);
+        return;
+      }
+
+      // Execute queries sequentially
+      const results: (QueryResult | QueryError)[] = [];
+      const allTableNames: string[] = [];
+
+      for (let i = 0; i < queriesToRun.length; i++) {
+        const query = queriesToRun[i];
+        setExecutionStatus(`Executing ${i + 1} of ${queriesToRun.length}...`);
+
+        try {
+          const result = await window.electron.executeQuery(query.sql);
+          results.push(result);
+
+          // Track table names from successful queries
+          const tableNames = extractTableNames(query.sql);
+          allTableNames.push(...tableNames);
+        } catch (err) {
+          results.push({
+            error: err instanceof Error ? err.message : 'Unknown error',
+            query: query.sql,
+          });
+        }
+      }
+
+      // Build QueryExecution object
+      const execution: QueryExecution = {
+        queries: queriesToRun.map(q => ({
+          sql: q.sql,
+          startLine: q.startLine,
+          endLine: q.endLine,
+        })),
+        results,
+        executedAt: new Date(),
+      };
 
       setTabs(tabs.map((tab) =>
-        tab.id === activeTabId ? { ...tab, results: result } : tab
+        tab.id === activeTabId
+          ? { ...tab, results: execution, activeResultIndex: 0 }
+          : tab
       ));
 
       // Track recently queried tables
-      const tableNames = extractTableNames(activeTab.sql);
-      if (tableNames.length > 0) {
+      if (allTableNames.length > 0) {
         setRecentTables((prev) => {
-          const updated = [...tableNames, ...prev.filter(t => !tableNames.includes(t))];
-          return updated.slice(0, 10); // Keep only the 10 most recent
+          const unique = [...new Set(allTableNames)];
+          const updated = [...unique, ...prev.filter(t => !unique.includes(t))];
+          return updated.slice(0, 10);
         });
+      }
+
+      // Update status
+      const successCount = results.filter(r => !('error' in r)).length;
+      const errorCount = results.filter(r => 'error' in r).length;
+      if (errorCount > 0) {
+        setExecutionStatus(`Executed ${successCount} of ${results.length} (${errorCount} failed)`);
+      } else {
+        setExecutionStatus(`Executed ${results.length} ${results.length === 1 ? 'query' : 'queries'}`);
       }
 
       setQuerySuccess(true);
@@ -224,6 +340,7 @@ function App() {
       title: `Untitled ${tabs.length + 1}`,
       sql: '-- Write your SQL query here\n',
       results: null,
+      activeResultIndex: 0,
       isUntitled: true,
       isDirty: false,
     };
@@ -262,11 +379,14 @@ function App() {
   const handleExportCSV = () => {
     if (!activeTab.results) return;
 
-    const { columns, rows } = activeTab.results;
+    const activeResult = activeTab.results.results[activeTab.activeResultIndex];
+    if (!activeResult || 'error' in activeResult) return;
+
+    const { columns, rows } = activeResult;
     const csvContent = [
       columns.join(','),
-      ...rows.map((row) =>
-        row.map((cell) => {
+      ...rows.map((row: unknown[]) =>
+        row.map((cell: unknown) => {
           const value = String(cell ?? '');
           return value.includes(',') || value.includes('"') || value.includes('\n')
             ? `"${value.replace(/"/g, '""')}"`
@@ -287,10 +407,13 @@ function App() {
   const handleCopyToClipboard = () => {
     if (!activeTab.results) return;
 
-    const { columns, rows } = activeTab.results;
+    const activeResult = activeTab.results.results[activeTab.activeResultIndex];
+    if (!activeResult || 'error' in activeResult) return;
+
+    const { columns, rows } = activeResult;
     const tsvContent = [
       columns.join('\t'),
-      ...rows.map((row) => row.map((cell) => String(cell ?? '')).join('\t')),
+      ...rows.map((row: unknown[]) => row.map((cell: unknown) => String(cell ?? '')).join('\t')),
     ].join('\n');
 
     navigator.clipboard.writeText(tsvContent);
@@ -386,6 +509,7 @@ function App() {
           title: fileName,
           sql: content,
           results: null,
+          activeResultIndex: 0,
           filePath,
           isUntitled: false,
           isDirty: false,
@@ -697,6 +821,54 @@ function App() {
           value={activeTab.sql}
           onChange={(value) => handleSqlChange(value || '')}
           theme={theme === 'dark' ? 'vs-dark' : 'vs'}
+          beforeMount={(monaco) => {
+            monacoRef.current = monaco;
+            // Register SQL completion provider
+            monaco.languages.registerCompletionItemProvider('sql', {
+              triggerCharacters: ['.', ' '],
+              provideCompletionItems: (model: Monaco.editor.ITextModel, position: Monaco.Position) => {
+                const word = model.getWordUntilPosition(position);
+                const range = {
+                  startLineNumber: position.lineNumber,
+                  endLineNumber: position.lineNumber,
+                  startColumn: word.startColumn,
+                  endColumn: word.endColumn,
+                };
+
+                const lineText = model.getValueInRange({
+                  startLineNumber: position.lineNumber,
+                  startColumn: 1,
+                  endLineNumber: position.lineNumber,
+                  endColumn: position.column,
+                });
+
+                const context = getCompletionContext(lineText);
+                const suggestions: Monaco.languages.CompletionItem[] = [];
+
+                if (context === 'column') {
+                  // After a dot - provide column completions
+                  const tableId = extractTableBeforeDot(lineText);
+                  if (tableId) {
+                    // Check if it's an alias
+                    const aliasMap = buildAliasMap(model.getValue());
+                    const resolvedTable = aliasMap.get(tableId.toLowerCase()) || tableId;
+                    suggestions.push(...getColumnCompletions(monaco, schemaTables, resolvedTable, range));
+                  }
+                } else if (context === 'table') {
+                  // After FROM/JOIN - provide table completions
+                  suggestions.push(...getTableCompletions(monaco, schemaTables, range, recentTables));
+                } else {
+                  // Default - provide keywords and functions
+                  suggestions.push(...getKeywordCompletions(monaco, range));
+                  suggestions.push(...getFunctionCompletions(monaco, range));
+                  // Also include tables for general context
+                  suggestions.push(...getTableCompletions(monaco, schemaTables, range, recentTables));
+                }
+
+                return { suggestions };
+              },
+            });
+          }}
           onMount={(editor) => {
             editorRef.current = editor;
           }}
@@ -706,6 +878,8 @@ function App() {
             lineHeight: 22,
             padding: { top: 12 },
             fontFamily: 'IBM Plex Mono, Monaco, Menlo, Consolas, monospace',
+            quickSuggestions: false, // Don't auto-popup, require trigger chars
+            suggestOnTriggerCharacters: true,
           }}
         />
       </div>
@@ -714,11 +888,37 @@ function App() {
         {error && <div className="error">{error}</div>}
 
         {activeTab.results && (
-          <ResultsTable
-            results={activeTab.results}
-            onExportCSV={handleExportCSV}
-            onCopyToClipboard={handleCopyToClipboard}
-          />
+          <>
+            <ResultsTabs
+              execution={activeTab.results}
+              activeResultIndex={activeTab.activeResultIndex}
+              onResultChange={(index) => {
+                setTabs(tabs.map(t =>
+                  t.id === activeTabId ? { ...t, activeResultIndex: index } : t
+                ));
+              }}
+            />
+            {(() => {
+              const result = activeTab.results.results[activeTab.activeResultIndex];
+              if (!result) return null;
+              if ('error' in result) {
+                return (
+                  <div className="query-error">
+                    <div className="query-error-title">Query Error</div>
+                    <div className="query-error-message">{result.error}</div>
+                    <div className="query-error-sql">{result.query}</div>
+                  </div>
+                );
+              }
+              return (
+                <ResultsTable
+                  results={result}
+                  onExportCSV={handleExportCSV}
+                  onCopyToClipboard={handleCopyToClipboard}
+                />
+              );
+            })()}
+          </>
         )}
       </div>
     </div>
@@ -748,18 +948,30 @@ function App() {
 
         <div className="toolbar-spacer"></div>
 
-        <button
-          className="btn-execute"
-          onClick={handleExecute}
-          disabled={isExecuting || !isConnected}
-          title="Execute query (Cmd+Enter)"
-        >
-          {isExecuting ? 'Executing...' : 'Execute'}
-        </button>
+        <div className="execute-group">
+          <button
+            className="btn-execute"
+            onClick={handleExecute}
+            disabled={isExecuting || !isConnected}
+            title="Execute query (Cmd+Enter)"
+          >
+            {isExecuting ? 'Executing...' : 'Execute'}
+          </button>
+          <select
+            className="execution-mode-select"
+            value={executionMode}
+            onChange={(e) => setExecutionMode(e.target.value as ExecutionMode)}
+            disabled={isExecuting || !isConnected}
+            title="Execution mode"
+          >
+            <option value="current">Current Query</option>
+            <option value="all">All Queries</option>
+          </select>
+        </div>
 
-        {activeTab.results && (
-          <span className={`results-count ${querySuccess ? 'pulse-once' : ''}`}>
-            {activeTab.results.rowCount} row{activeTab.results.rowCount !== 1 ? 's' : ''}
+        {executionStatus && (
+          <span className={`execution-status ${querySuccess ? 'pulse-once' : ''}`}>
+            {executionStatus}
           </span>
         )}
 
