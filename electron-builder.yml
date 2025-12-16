@@ -1,0 +1,54 @@
+appId: com.andrewedunn.purple-sql-eater
+productName: Purple SQL Eater
+copyright: Copyright © 2024 Andrew Dunn
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist/**/*
+  - package.json
+
+mac:
+  category: public.app-category.developer-tools
+  icon: build/icon.icns
+  target:
+    - target: dmg
+      arch:
+        - universal
+    - target: zip
+      arch:
+        - universal
+
+win:
+  icon: build/icon.png
+  target:
+    - nsis
+
+linux:
+  icon: build/icon.png
+  target:
+    - AppImage
+  category: Development
+
+dmg:
+  title: ${productName} ${version}
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  installerIcon: build/icon.png
+  uninstallerIcon: build/icon.png
+
+publish:
+  provider: github
+  owner: andrewedunn
+  repo: purple-sql-eater

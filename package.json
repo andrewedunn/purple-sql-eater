@@ -1,16 +1,30 @@
 {
   "name": "purple-sql-eater",
+  "productName": "Purple SQL Eater",
   "version": "0.1.0",
   "description": "A simple, fast SQL client for business analysts",
   "main": "dist/main/main/main.js",
+  "author": {
+    "name": "Andrew Dunn",
+    "email": "andrew@andrewedunn.com"
+  },
+  "homepage": "https://github.com/andrewedunn/purple-sql-eater",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/andrewedunn/purple-sql-eater.git"
+  },
   "scripts": {
-    "dev": "concurrently \"npm run dev:renderer\" \"npm run dev:main\"",
+    "dev": "concurrently --kill-others \"npm run dev:renderer\" \"npm run dev:main\"",
     "dev:renderer": "vite",
     "dev:main": "tsc -p tsconfig.main.json && NODE_ENV=development electron .",
     "build": "npm run build:renderer && npm run build:main",
     "build:renderer": "vite build",
     "build:main": "tsc -p tsconfig.main.json",
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "npm run build && electron-builder",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:linux": "npm run build && electron-builder --linux"
   },
   "keywords": [
     "sql",
@@ -18,7 +32,6 @@
     "bigquery",
     "electron"
   ],
-  "author": "",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.10.0",
@@ -27,6 +40,7 @@
     "@vitejs/plugin-react": "^4.2.1",
     "concurrently": "^8.2.2",
     "electron": "^28.0.0",
+    "electron-builder": "^26.0.12",
     "typescript": "^5.3.3",
     "vite": "^5.0.7"
   },
@@ -34,7 +48,7 @@
     "@google-cloud/bigquery": "^7.3.0",
     "@monaco-editor/react": "^4.6.0",
     "@tanstack/react-virtual": "^3.13.13",
-    "chokidar": "^5.0.0",
+    "chokidar": "^3.6.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "zod": "^4.1.13"
