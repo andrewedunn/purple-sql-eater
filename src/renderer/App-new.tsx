@@ -23,6 +23,9 @@ import {
   extractTableBeforeDot,
   getCompletionContext,
   buildAliasMap,
+  extractTablesFromQuery,
+  getMultiTableColumnCompletions,
+  isInSelectClause,
 } from './utils/sqlCompletions';
 import './design-system.css';
 import './App-new.css';
@@ -30,6 +33,13 @@ import './App-new.css';
 const THEME_STORAGE_KEY = 'purple-sql-eater-theme';
 const RECENT_TABLES_KEY = 'purple-sql-eater-recent-tables';
 const LAYOUT_STORAGE_KEY = 'purple-sql-eater-layout';
+const EXECUTION_MODE_KEY = 'purple-sql-eater-execution-mode';
+
+// Platform-specific modifier key
+const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+const modKey = isMac ? '⌘' : 'Ctrl+';
+const shiftKey = isMac ? '⇧' : 'Shift+';
+const enterKey = isMac ? '↵' : 'Enter';
 
 type BrowserPosition = 'left' | 'right';
 type LayoutMode = 'stacked' | 'horizontal';
@@ -52,7 +62,13 @@ function App() {
       isDirty: false,
     },
   ]);
-  const [executionMode, setExecutionMode] = useState<ExecutionMode>('current');
+  const [executionMode, setExecutionMode] = useState<ExecutionMode>(() => {
+    const stored = localStorage.getItem(EXECUTION_MODE_KEY);
+    return (stored as ExecutionMode) || 'current';
+  });
+  const [queryCount, setQueryCount] = useState(1);
+  const [showExecuteMenu, setShowExecuteMenu] = useState(false);
+  const executeMenuRef = useRef<HTMLDivElement>(null);
   const [executionStatus, setExecutionStatus] = useState<string | null>(null);
   const [activeTabId, setActiveTabId] = useState('1');
   const [isExecuting, setIsExecuting] = useState(false);
@@ -96,6 +112,8 @@ function App() {
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof Monaco | null>(null);
   const [schemaTables, setSchemaTables] = useState<import('../shared/types').Table[]>([]);
+  const schemaTablesRef = useRef<import('../shared/types').Table[]>([]);
+  const recentTablesRef = useRef<string[]>([]);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
@@ -112,6 +130,28 @@ function App() {
     localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layoutConfig));
   }, [layoutConfig]);
 
+  // Persist execution mode preference
+  useEffect(() => {
+    localStorage.setItem(EXECUTION_MODE_KEY, executionMode);
+  }, [executionMode]);
+
+  // Count queries in current tab
+  useEffect(() => {
+    const count = splitQueries(activeTab.sql).length;
+    setQueryCount(count);
+  }, [activeTab.sql]);
+
+  // Close execute menu on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (executeMenuRef.current && !executeMenuRef.current.contains(e.target as Node)) {
+        setShowExecuteMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Fetch schema tables when connected (for autocomplete)
   useEffect(() => {
     if (!isConnected) {
@@ -121,8 +161,12 @@ function App() {
 
     const fetchSchema = async () => {
       try {
+        console.log('App-new: Fetching schema for autocomplete...');
         const schema = await window.electron.getSchema();
-        setSchemaTables(schema.tables || []);
+        console.log('App-new: Got schema with', schema?.tables?.length || 0, 'tables');
+        const tables = schema.tables || [];
+        setSchemaTables(tables);
+        schemaTablesRef.current = tables;
       } catch (err) {
         console.error('Failed to fetch schema for autocomplete:', err);
       }
@@ -131,34 +175,16 @@ function App() {
     fetchSchema();
   }, [isConnected, currentConnection?.id]);
 
+  // Keep recentTablesRef in sync
+  useEffect(() => {
+    recentTablesRef.current = recentTables;
+  }, [recentTables]);
+
   const toggleTheme = () => {
     setTheme(theme === 'light' ? 'dark' : 'light');
   };
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        e.preventDefault();
-        handleExecute();
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === 't') {
-        e.preventDefault();
-        handleNewTab();
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-        e.preventDefault();
-        if (e.shiftKey) {
-          handleFileSaveAs(activeTabId);
-        } else {
-          handleFileSave(activeTabId);
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTabId, tabs, isConnected]);
-
+  
   const handleConnect = async (result: ConnectionDialogResult) => {
     setConnectionError(null);
     try {
@@ -231,17 +257,17 @@ function App() {
 
       // Determine which queries to run based on context
       if (selection && !selection.isEmpty()) {
-        // Selection takes priority - run selected text
+        // Selection takes priority - split selected text into queries
         const model = editor.getModel();
         if (model) {
           const selectedText = model.getValueInRange(selection);
-          queriesToRun = [{
-            sql: selectedText.trim(),
-            startLine: selection.startLineNumber,
-            endLine: selection.endLineNumber,
-            startOffset: 0,
-            endOffset: selectedText.length,
-          }];
+          const parsedQueries = splitQueries(selectedText);
+          // Adjust line numbers to be relative to selection start
+          queriesToRun = parsedQueries.map(q => ({
+            ...q,
+            startLine: selection.startLineNumber + q.startLine - 1,
+            endLine: selection.startLineNumber + q.endLine - 1,
+          }));
         }
       } else if (executionMode === 'current' && position) {
         // Run query at cursor position
@@ -291,6 +317,7 @@ function App() {
           endLine: q.endLine,
         })),
         results,
+        resultFilters: results.map(() => []), // Initialize empty filters for each result
         executedAt: new Date(),
       };
 
@@ -326,6 +353,44 @@ function App() {
       setIsExecuting(false);
     }
   };
+
+  // Keyboard shortcuts - must be after handleExecute is defined
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        if (!isConnected || isExecuting) return;
+
+        if (e.shiftKey) {
+          // Cmd+Shift+Enter: Execute All - temporarily set mode to 'all'
+          const originalMode = executionMode;
+          setExecutionMode('all');
+          setTimeout(() => {
+            handleExecute();
+            setExecutionMode(originalMode);
+          }, 0);
+        } else {
+          // Cmd+Enter: Execute based on current mode
+          handleExecute();
+        }
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 't') {
+        e.preventDefault();
+        handleNewTab();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          handleFileSaveAs(activeTabId);
+        } else {
+          handleFileSave(activeTabId);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  });
 
   const handleSqlChange = (sql: string) => {
     setTabs(tabs.map((tab) =>
@@ -758,6 +823,13 @@ function App() {
     }
   };
 
+  // Handle schema loaded from SchemaBrowser (includes columns)
+  const handleSchemaLoaded = (tables: import('../shared/types').Table[]) => {
+    console.log('App-new: Schema with columns loaded:', tables.length, 'tables');
+    setSchemaTables(tables);
+    schemaTablesRef.current = tables;
+  };
+
   // Render components with layout props
   const renderSchemaBrowser = () => (
     <SchemaBrowser
@@ -772,6 +844,7 @@ function App() {
       showLayoutMode={showLayoutModeOption && layoutConfig.schemaPosition === layoutConfig.filePosition}
       layoutMode={layoutConfig.layoutMode}
       onLayoutModeChange={handleLayoutModeChange}
+      onSchemaLoaded={handleSchemaLoaded}
     />
   );
 
@@ -845,32 +918,112 @@ function App() {
                 const context = getCompletionContext(lineText);
                 const suggestions: Monaco.languages.CompletionItem[] = [];
 
+                // Use refs to get current values (closure would capture stale state)
+                const tables = schemaTablesRef.current;
+                const recent = recentTablesRef.current;
+
+                console.log('Autocomplete context:', { lineText, context, schemaTablesCount: tables.length });
+
                 if (context === 'column') {
-                  // After a dot - provide column completions
-                  const tableId = extractTableBeforeDot(lineText);
-                  if (tableId) {
-                    // Check if it's an alias
-                    const aliasMap = buildAliasMap(model.getValue());
-                    const resolvedTable = aliasMap.get(tableId.toLowerCase()) || tableId;
-                    suggestions.push(...getColumnCompletions(monaco, schemaTables, resolvedTable, range));
+                  // After a dot - could be schema.table or table.column
+                  const identifier = extractTableBeforeDot(lineText);
+                  console.log('After dot, identifier:', identifier);
+                  if (identifier) {
+                    // Check if it's a schema/dataset name
+                    const schemas = tables.map(t => t.schema).filter(Boolean);
+                    console.log('Available schemas:', [...new Set(schemas)]);
+                    const isSchema = tables.some(t =>
+                      t.schema?.toLowerCase() === identifier.toLowerCase()
+                    );
+                    console.log('Is schema?', isSchema);
+
+                    if (isSchema) {
+                      // It's a schema - show tables in that schema
+                      const tableSuggestions = getTableCompletions(monaco, tables, range, recent, identifier);
+                      console.log('Table suggestions for schema:', tableSuggestions.length);
+                      suggestions.push(...tableSuggestions);
+                    } else {
+                      // It's a table - show columns
+                      // Check if it's an alias first
+                      const aliasMap = buildAliasMap(model.getValue());
+                      console.log('Alias map:', Object.fromEntries(aliasMap));
+                      const resolvedTable = aliasMap.get(identifier.toLowerCase()) || identifier;
+                      console.log('Resolved table:', resolvedTable);
+                      const colSuggestions = getColumnCompletions(monaco, tables, resolvedTable, range);
+                      console.log('Column suggestions:', colSuggestions.length);
+                      suggestions.push(...colSuggestions);
+                    }
                   }
                 } else if (context === 'table') {
                   // After FROM/JOIN - provide table completions
-                  suggestions.push(...getTableCompletions(monaco, schemaTables, range, recentTables));
+                  suggestions.push(...getTableCompletions(monaco, tables, range, recent));
                 } else {
-                  // Default - provide keywords and functions
-                  suggestions.push(...getKeywordCompletions(monaco, range));
-                  suggestions.push(...getFunctionCompletions(monaco, range));
-                  // Also include tables for general context
-                  suggestions.push(...getTableCompletions(monaco, schemaTables, range, recentTables));
+                  // Default context - check if we're in SELECT clause with tables
+                  const fullSql = model.getValue();
+                  const queryTables = extractTablesFromQuery(fullSql);
+                  const cursorOffset = model.getOffsetAt(position);
+                  const inSelect = isInSelectClause(fullSql, cursorOffset);
+
+                  console.log('Default context:', { queryTablesCount: queryTables.length, inSelect, tablesLoaded: tables.length });
+
+                  if (inSelect && queryTables.length > 0 && tables.length > 0) {
+                    // In SELECT with tables defined - show ONLY columns and functions, no random tables
+                    const columnSuggestions = getMultiTableColumnCompletions(monaco, tables, queryTables, range, true);
+                    console.log('SELECT context - columns only:', columnSuggestions.length);
+                    suggestions.push(...columnSuggestions);
+                    suggestions.push(...getFunctionCompletions(monaco, range));
+                  } else {
+                    // Not in SELECT, or no tables yet, or schema not loaded - show everything
+                    suggestions.push(...getKeywordCompletions(monaco, range));
+                    suggestions.push(...getFunctionCompletions(monaco, range));
+                    if (queryTables.length > 0 && tables.length > 0) {
+                      const columnSuggestions = getMultiTableColumnCompletions(monaco, tables, queryTables, range, false);
+                      suggestions.push(...columnSuggestions);
+                    }
+                    suggestions.push(...getTableCompletions(monaco, tables, range, recent));
+                  }
                 }
 
                 return { suggestions };
               },
             });
           }}
-          onMount={(editor) => {
+          onMount={(editor, monaco) => {
             editorRef.current = editor;
+
+            // Add Cmd/Ctrl+Enter keybinding to execute query
+            editor.addAction({
+              id: 'execute-query',
+              label: 'Execute Query',
+              keybindings: [
+                monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
+              ],
+              run: () => {
+                if (isConnected && !isExecuting) {
+                  handleExecute();
+                }
+              },
+            });
+
+            // Add Cmd/Ctrl+Shift+Enter keybinding to execute all queries
+            editor.addAction({
+              id: 'execute-all-queries',
+              label: 'Execute All Queries',
+              keybindings: [
+                monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter,
+              ],
+              run: () => {
+                if (isConnected && !isExecuting) {
+                  // Temporarily switch to 'all' mode and execute
+                  const originalMode = executionMode;
+                  setExecutionMode('all');
+                  setTimeout(() => {
+                    handleExecute();
+                    setExecutionMode(originalMode);
+                  }, 0);
+                }
+              },
+            });
           }}
           options={{
             minimap: { enabled: false },
@@ -878,7 +1031,11 @@ function App() {
             lineHeight: 22,
             padding: { top: 12 },
             fontFamily: 'IBM Plex Mono, Monaco, Menlo, Consolas, monospace',
-            quickSuggestions: false, // Don't auto-popup, require trigger chars
+            quickSuggestions: {
+              other: true,
+              comments: false,
+              strings: false,
+            },
             suggestOnTriggerCharacters: true,
           }}
         />
@@ -910,9 +1067,25 @@ function App() {
                   </div>
                 );
               }
+              const currentFilters = activeTab.results.resultFilters[activeTab.activeResultIndex] || [];
               return (
                 <ResultsTable
                   results={result}
+                  filters={currentFilters}
+                  onFiltersChange={(newFilters) => {
+                    setTabs(tabs.map(t => {
+                      if (t.id !== activeTabId || !t.results) return t;
+                      const updatedFilters = [...t.results.resultFilters];
+                      updatedFilters[t.activeResultIndex] = newFilters;
+                      return {
+                        ...t,
+                        results: {
+                          ...t.results,
+                          resultFilters: updatedFilters,
+                        },
+                      };
+                    }));
+                  }}
                   onExportCSV={handleExportCSV}
                   onCopyToClipboard={handleCopyToClipboard}
                 />
@@ -948,25 +1121,63 @@ function App() {
 
         <div className="toolbar-spacer"></div>
 
-        <div className="execute-group">
-          <button
-            className="btn-execute"
-            onClick={handleExecute}
-            disabled={isExecuting || !isConnected}
-            title="Execute query (Cmd+Enter)"
-          >
-            {isExecuting ? 'Executing...' : 'Execute'}
-          </button>
-          <select
-            className="execution-mode-select"
-            value={executionMode}
-            onChange={(e) => setExecutionMode(e.target.value as ExecutionMode)}
-            disabled={isExecuting || !isConnected}
-            title="Execution mode"
-          >
-            <option value="current">Current Query</option>
-            <option value="all">All Queries</option>
-          </select>
+        <div className="execute-group" ref={executeMenuRef}>
+          {queryCount <= 1 ? (
+            // Single query: simple execute button
+            <button
+              className="btn-execute btn-execute-single"
+              onClick={handleExecute}
+              disabled={isExecuting || !isConnected}
+              title={`Execute query (${modKey}${enterKey})`}
+            >
+              {isExecuting ? 'Executing...' : 'Execute'}
+              <span className="btn-shortcut">{modKey}{enterKey}</span>
+            </button>
+          ) : (
+            // Multiple queries: button with dropdown
+            <>
+              <button
+                className="btn-execute"
+                onClick={handleExecute}
+                disabled={isExecuting || !isConnected}
+                title={executionMode === 'current' ? `Execute current query (${modKey}${enterKey})` : `Execute all queries (${modKey}${enterKey})`}
+              >
+                {isExecuting ? 'Executing...' : executionMode === 'current' ? 'Execute Current' : 'Execute All'}
+              </button>
+              <button
+                className="btn-execute-dropdown"
+                onClick={() => setShowExecuteMenu(!showExecuteMenu)}
+                disabled={isExecuting || !isConnected}
+                title="Execution options"
+              >
+                ▾
+              </button>
+              {showExecuteMenu && (
+                <div className="execute-menu">
+                  <button
+                    className={`execute-menu-item ${executionMode === 'current' ? 'active' : ''}`}
+                    onClick={() => {
+                      setExecutionMode('current');
+                      setShowExecuteMenu(false);
+                    }}
+                  >
+                    <span className="execute-menu-label">Execute Current</span>
+                    <span className="execute-menu-shortcut">{modKey}{enterKey}</span>
+                  </button>
+                  <button
+                    className={`execute-menu-item ${executionMode === 'all' ? 'active' : ''}`}
+                    onClick={() => {
+                      setExecutionMode('all');
+                      setShowExecuteMenu(false);
+                    }}
+                  >
+                    <span className="execute-menu-label">Execute All ({queryCount})</span>
+                    <span className="execute-menu-shortcut">{modKey}{shiftKey}{enterKey}</span>
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         {executionStatus && (

@@ -112,7 +112,7 @@ export function ConnectionPicker({
                       >
                         <span className="connection-name">{conn.name}</span>
                         <span className="connection-type">
-                          {conn.config.type}
+                          {conn.type}
                         </span>
                         <button
                           className="btn-delete-connection"

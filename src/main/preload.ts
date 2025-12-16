@@ -78,6 +78,12 @@ contextBridge.exposeInMainWorld('electron', {
   fileUnwatch: (filePath: string): Promise<void> =>
     ipcRenderer.invoke('file-unwatch', filePath),
 
+  folderWatch: (folderPath: string): Promise<void> =>
+    ipcRenderer.invoke('folder-watch', folderPath),
+
+  folderUnwatch: (folderPath: string): Promise<void> =>
+    ipcRenderer.invoke('folder-unwatch', folderPath),
+
   // Secure connection storage operations
   connectionsLoadList: (): Promise<Array<{ id: string; name: string; type: string }>> =>
     ipcRenderer.invoke('connections-load-list'),

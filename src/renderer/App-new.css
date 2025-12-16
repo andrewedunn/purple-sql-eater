@@ -57,14 +57,31 @@
 .execute-group {
   display: flex;
   align-items: stretch;
+  position: relative;
 }
 
-.execute-group .btn-execute {
+/* Single query button shows shortcut inline */
+.btn-execute-single {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.btn-shortcut {
+  font-size: 10px;
+  opacity: 0.7;
+  font-weight: 400;
+  margin-left: var(--space-1);
+}
+
+/* Multi-query mode: execute button + dropdown */
+.execute-group .btn-execute:not(.btn-execute-single) {
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
 }
 
-.execution-mode-select {
+.btn-execute-dropdown {
   padding: var(--space-2) var(--space-2);
   background-color: var(--color-accent);
   border: none;
@@ -72,24 +89,83 @@
   border-top-right-radius: var(--radius-sm);
   border-bottom-right-radius: var(--radius-sm);
   color: white;
-  font-size: var(--font-size-xs);
+  font-size: 10px;
   font-family: var(--font-ui);
   cursor: pointer;
   transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
 }
 
-.execution-mode-select:hover:not(:disabled) {
+.btn-execute-dropdown:hover:not(:disabled) {
   background-color: var(--color-accent-hover);
 }
 
-.execution-mode-select:disabled {
+.btn-execute-dropdown:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.execution-mode-select option {
-  background-color: var(--color-surface);
+/* Execute dropdown menu */
+.execute-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  overflow: hidden;
+  min-width: 180px;
+}
+
+.execute-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border: none;
   color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-ui);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  text-align: left;
+}
+
+.execute-menu-item:hover {
+  background: var(--color-surface-hover);
+}
+
+.execute-menu-item.active {
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+}
+
+.execute-menu-item.active:hover {
+  background: var(--color-accent-light);
+}
+
+.execute-menu-label {
+  font-weight: 500;
+}
+
+.execute-menu-shortcut {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-mono);
+}
+
+.execute-menu-item.active .execute-menu-shortcut {
+  color: var(--color-accent);
+  opacity: 0.7;
 }
 
 .execution-status {

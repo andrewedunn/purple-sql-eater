@@ -18,6 +18,7 @@ interface SchemaBrowserProps {
   showLayoutMode?: boolean;
   layoutMode?: 'stacked' | 'horizontal';
   onLayoutModeChange?: (mode: 'stacked' | 'horizontal') => void;
+  onSchemaLoaded?: (tables: Table[]) => void;
 }
 
 export function SchemaBrowser({
@@ -32,8 +33,10 @@ export function SchemaBrowser({
   showLayoutMode = false,
   layoutMode = 'stacked',
   onLayoutModeChange,
+  onSchemaLoaded,
 }: SchemaBrowserProps) {
   const [tables, setTables] = useState<Table[]>([]);
+  const tablesRef = useRef<Table[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingProgress, setLoadingProgress] = useState<{ current: number; total: number } | null>(null);
@@ -75,6 +78,7 @@ export function SchemaBrowser({
           const cachedSchema = JSON.parse(cached);
           console.log(`Loaded ${cachedSchema.tables.length} tables from cache`);
           setTables(cachedSchema.tables);
+          tablesRef.current = cachedSchema.tables;
           setLoading(false);
 
           // Refresh in background
@@ -102,6 +106,7 @@ export function SchemaBrowser({
       console.timeEnd('Schema load (total)');
       console.log(`Loaded ${schema.tables.length} tables`);
       setTables(schema.tables);
+      tablesRef.current = schema.tables;
 
       // Cache for next time
       localStorage.setItem(cacheKey, JSON.stringify(schema));
@@ -130,6 +135,7 @@ export function SchemaBrowser({
 
       // Update UI if tables changed
       setTables(schema.tables);
+      tablesRef.current = schema.tables;
 
       // Start loading columns in background
       loadAllColumnsInBackground(schema.tables);
@@ -172,15 +178,17 @@ export function SchemaBrowser({
 
             if (abortController.signal.aborted) return;
 
-            setTables(prevTables =>
-              prevTables.map(t => {
+            setTables(prevTables => {
+              const newTables = prevTables.map(t => {
                 const tFullName = `${t.schema}.${t.name}`;
                 if (tFullName === fullName) {
                   return { ...t, columns };
                 }
                 return t;
-              })
-            );
+              });
+              tablesRef.current = newTables;
+              return newTables;
+            });
 
             setLoadedColumns(prev => new Set(prev).add(fullName));
             loaded++;
@@ -196,6 +204,12 @@ export function SchemaBrowser({
 
     console.log(`Finished loading columns for ${loaded}/${total} tables`);
     setColumnLoadingProgress(null);
+
+    // Notify parent that schema with columns is ready
+    if (onSchemaLoaded) {
+      console.log('SchemaBrowser: Calling onSchemaLoaded with', tablesRef.current.length, 'tables');
+      onSchemaLoaded(tablesRef.current);
+    }
   };
 
   const toggleSchema = (schemaName: string) => {
@@ -222,13 +236,17 @@ export function SchemaBrowser({
         try {
           const columns = await window.electron.getColumns(fullTableName);
 
-          setTables(tables.map(table => {
-            const tableFullName = `${table.schema}.${table.name}`;
-            if (tableFullName === fullTableName) {
-              return { ...table, columns };
-            }
-            return table;
-          }));
+          setTables(prevTables => {
+            const newTables = prevTables.map(table => {
+              const tableFullName = `${table.schema}.${table.name}`;
+              if (tableFullName === fullTableName) {
+                return { ...table, columns };
+              }
+              return table;
+            });
+            tablesRef.current = newTables;
+            return newTables;
+          });
 
           setLoadedColumns(new Set(loadedColumns).add(fullTableName));
         } catch (err) {

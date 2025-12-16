@@ -1,7 +1,7 @@
 // ABOUTME: Electron main process that manages the application window and IPC handlers.
 // ABOUTME: Handles database connections and query execution in the Node.js environment.
 
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu } from 'electron';
 import * as path from 'path';
 import type { ConnectionConfig, QueryResult, DatabaseConnector, SearchOptions } from '../shared/types';
 import { BigQueryConnector } from './connectors/bigquery';
@@ -45,18 +45,78 @@ function createWindow() {
   fileWatcherService.setWindow(mainWindow);
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  // Set up application menu (required for Cmd+Q to work on macOS)
+  const template: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
+      ],
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+      ],
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        { type: 'separator' },
+        { role: 'front' },
+      ],
+    },
+  ];
+
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  // On macOS, quit when window is closed (not typical macOS behavior, but simpler for now)
+  app.quit();
 });
 
 app.on('activate', () => {
   if (mainWindow === null) {
     createWindow();
   }
+});
+
+// Handle quit properly - clean up and exit
+app.on('before-quit', () => {
+  fileWatcherService.unwatchAll();
 });
 
 // Helper to validate file paths from renderer
@@ -268,12 +328,22 @@ handleIPC('recent-files-get', async () => {
 // File watching IPC handlers
 handleIPC('file-watch', async (_event, filePath: string) => {
   validateFilePath(filePath);
-  await fileWatcherService.watchFile(filePath);
+  fileWatcherService.watchFile(filePath);
 });
 
 handleIPC('file-unwatch', async (_event, filePath: string) => {
   validateFilePath(filePath);
   fileWatcherService.unwatchFile(filePath);
+});
+
+handleIPC('folder-watch', async (_event, folderPath: string) => {
+  validateFilePath(folderPath);
+  fileWatcherService.watchFolder(folderPath);
+});
+
+handleIPC('folder-unwatch', async (_event, folderPath: string) => {
+  validateFilePath(folderPath);
+  fileWatcherService.unwatchFolder(folderPath);
 });
 
 // Secure connection storage IPC handlers

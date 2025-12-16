@@ -9,6 +9,8 @@ import './ResultsTable.css';
 
 interface ResultsTableProps {
   results: QueryResult;
+  filters: ColumnFilter[];
+  onFiltersChange: (filters: ColumnFilter[]) => void;
   onExportCSV?: () => void;
   onCopyToClipboard?: () => void;
 }
@@ -87,7 +89,7 @@ function applyFilters(rows: unknown[][], filters: ColumnFilter[]): unknown[][] {
   );
 }
 
-export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: ResultsTableProps) {
+export function ResultsTable({ results, filters, onFiltersChange, onExportCSV, onCopyToClipboard }: ResultsTableProps) {
   const [sortState, setSortState] = useState<SortState>({ columnIndex: null, direction: null });
   const [columnWidths, setColumnWidths] = useState<Record<number, number>>({});
   const [resizingColumn, setResizingColumn] = useState<number | null>(null);
@@ -95,10 +97,13 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
   const [resizeStartWidth, setResizeStartWidth] = useState(0);
   const [currentPage, setCurrentPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(100);
-  const [columnFilters, setColumnFilters] = useState<ColumnFilter[]>([]);
   const [filterMenuColumn, setFilterMenuColumn] = useState<number | null>(null);
+  const [filterMenuAnchor, setFilterMenuAnchor] = useState<HTMLElement | null>(null);
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
   const [showNullHighlight, setShowNullHighlight] = useState(false);
+
+  // Use filters from props
+  const columnFilters = filters;
   const dataScrollRef = useRef<HTMLDivElement>(null);
   const headersScrollRef = useRef<HTMLDivElement>(null);
   const rowNumbersScrollRef = useRef<HTMLDivElement>(null);
@@ -157,34 +162,40 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
 
   const handleResizeStart = (e: React.MouseEvent, columnIndex: number) => {
     e.stopPropagation();
-    const th = (e.target as HTMLElement).closest('th');
-    if (!th) return;
+    const headerCell = (e.target as HTMLElement).closest('.header-cell');
+    if (!headerCell) return;
 
     setResizingColumn(columnIndex);
     setResizeStartX(e.clientX);
-    setResizeStartWidth(th.offsetWidth);
+    setResizeStartWidth(headerCell.getBoundingClientRect().width);
   };
 
   const handleFilterClick = (e: React.MouseEvent, columnIndex: number) => {
     e.stopPropagation();
-    setFilterMenuColumn(filterMenuColumn === columnIndex ? null : columnIndex);
+    const target = e.currentTarget as HTMLElement;
+    if (filterMenuColumn === columnIndex) {
+      setFilterMenuColumn(null);
+      setFilterMenuAnchor(null);
+    } else {
+      setFilterMenuColumn(columnIndex);
+      setFilterMenuAnchor(target);
+    }
   };
 
   const handleApplyFilter = (filter: ColumnFilter) => {
-    setColumnFilters((prev) => {
-      const existing = prev.findIndex((f) => f.columnIndex === filter.columnIndex);
-      if (existing >= 0) {
-        const updated = [...prev];
-        updated[existing] = filter;
-        return updated;
-      }
-      return [...prev, filter];
-    });
+    const existing = columnFilters.findIndex((f) => f.columnIndex === filter.columnIndex);
+    if (existing >= 0) {
+      const updated = [...columnFilters];
+      updated[existing] = filter;
+      onFiltersChange(updated);
+    } else {
+      onFiltersChange([...columnFilters, filter]);
+    }
     setCurrentPage(0); // Reset to first page when filtering
   };
 
   const handleClearFilter = (columnIndex: number) => {
-    setColumnFilters((prev) => prev.filter((f) => f.columnIndex !== columnIndex));
+    onFiltersChange(columnFilters.filter((f) => f.columnIndex !== columnIndex));
     setCurrentPage(0);
   };
 
@@ -323,7 +334,15 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
       {columnFilters.length > 0 && (
         <div className="filter-pills">
           {columnFilters.map((filter) => (
-            <div key={filter.columnIndex} className="filter-pill">
+            <div
+              key={filter.columnIndex}
+              className="filter-pill"
+              onClick={(e) => {
+                setFilterMenuColumn(filter.columnIndex);
+                setFilterMenuAnchor(e.currentTarget as HTMLElement);
+              }}
+              title="Click to edit filter"
+            >
               <span className="filter-pill-label">{filter.columnName}</span>
               <span className="filter-pill-value">
                 {filter.operator === 'is_null' ? 'is NULL' :
@@ -333,16 +352,31 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
               </span>
               <button
                 className="filter-pill-remove"
-                onClick={() => handleClearFilter(filter.columnIndex)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleClearFilter(filter.columnIndex);
+                }}
                 title="Remove filter"
               >
                 ×
               </button>
+              {filterMenuColumn === filter.columnIndex && (
+                <ColumnFilterMenu
+                  columnIndex={filter.columnIndex}
+                  columnName={filter.columnName}
+                  columnType={filter.type}
+                  currentFilter={filter}
+                  onApplyFilter={handleApplyFilter}
+                  onClearFilter={() => handleClearFilter(filter.columnIndex)}
+                  onClose={() => { setFilterMenuColumn(null); setFilterMenuAnchor(null); }}
+                  anchorEl={filterMenuAnchor}
+                />
+              )}
             </div>
           ))}
           <button
             className="filter-clear-all"
-            onClick={() => setColumnFilters([])}
+            onClick={() => onFiltersChange([])}
           >
             Clear all
           </button>
@@ -356,51 +390,48 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
         {/* Column headers */}
         <div className="headers-container">
           <div ref={headersScrollRef} className="headers-scroll">
-            <table className="results-table-header-table">
-              <thead>
-                <tr>
-                  {results.columns.map((col, idx) => {
-                    const width = columnWidths[idx] || 200;
-                    const hasFilter = getFilterForColumn(idx);
-                    return (
-                      <th
-                        key={idx}
-                        onClick={() => handleSort(idx)}
-                        className={`sortable ${hasFilter ? 'has-filter' : ''}`}
-                        title="Click to sort"
-                        style={{ width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }}
-                      >
-                        <span className="th-content">
-                          {col}{getSortIndicator(idx)}
-                        </span>
-                        <button
-                          className={`filter-button ${hasFilter ? 'active' : ''}`}
-                          onClick={(e) => handleFilterClick(e, idx)}
-                          title="Filter column"
-                        >
-                          ⫶
-                        </button>
-                        <span
-                          className="resize-handle"
-                          onMouseDown={(e) => handleResizeStart(e, idx)}
-                        />
-                        {filterMenuColumn === idx && (
-                          <ColumnFilterMenu
-                            columnIndex={idx}
-                            columnName={col}
-                            columnType={isNumericColumn(results.rows, idx) ? 'number' : 'text'}
-                            currentFilter={hasFilter}
-                            onApplyFilter={handleApplyFilter}
-                            onClearFilter={() => handleClearFilter(idx)}
-                            onClose={() => setFilterMenuColumn(null)}
-                          />
-                        )}
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-            </table>
+            <div className="results-table-header-row" style={{ width: `${totalTableWidth}px` }}>
+              {results.columns.map((col, idx) => {
+                const width = columnWidths[idx] || 200;
+                const hasFilter = getFilterForColumn(idx);
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => handleSort(idx)}
+                    className={`header-cell sortable ${hasFilter ? 'has-filter' : ''}`}
+                    title="Click to sort"
+                    style={{ width: `${width}px` }}
+                  >
+                    <span className="th-content">
+                      {col}{getSortIndicator(idx)}
+                    </span>
+                    <button
+                      className={`filter-button ${hasFilter ? 'active' : ''}`}
+                      onClick={(e) => handleFilterClick(e, idx)}
+                      title="Filter column"
+                    >
+                      ⫶
+                    </button>
+                    <span
+                      className="resize-handle"
+                      onMouseDown={(e) => handleResizeStart(e, idx)}
+                    />
+                    {filterMenuColumn === idx && (
+                      <ColumnFilterMenu
+                        columnIndex={idx}
+                        columnName={col}
+                        columnType={isNumericColumn(results.rows, idx) ? 'number' : 'text'}
+                        currentFilter={hasFilter}
+                        onApplyFilter={handleApplyFilter}
+                        onClearFilter={() => handleClearFilter(idx)}
+                        onClose={() => { setFilterMenuColumn(null); setFilterMenuAnchor(null); }}
+                        anchorEl={filterMenuAnchor}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -445,43 +476,41 @@ export function ResultsTable({ results, onExportCSV, onCopyToClipboard }: Result
               position: 'relative',
             }}
           >
-            <table className="results-table-body">
-              <tbody>
-                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                  const row = paginatedRows[virtualRow.index];
-                  return (
-                    <tr
-                      key={virtualRow.index}
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: `${totalTableWidth}px`,
-                        height: `${virtualRow.size}px`,
-                        transform: `translateY(${virtualRow.start}px)`,
-                      }}
-                      className={virtualRow.index % 2 === 0 ? 'even' : 'odd'}
-                    >
-                      {row.map((cell, cellIdx) => {
-                        const width = columnWidths[cellIdx] || 200;
-                        const isNull = cell === null || cell === undefined;
-                        const isSelected = selectedCell?.row === virtualRow.index && selectedCell?.col === cellIdx;
-                        return (
-                          <td
-                            key={cellIdx}
-                            className={`${isNull && showNullHighlight ? 'null-cell' : ''} ${isSelected ? 'selected' : ''}`}
-                            style={{ width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }}
-                            onClick={() => setSelectedCell({ row: virtualRow.index, col: cellIdx })}
-                          >
-                            {formatCell(cell, isNull)}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <div className="results-table-body" style={{ width: `${totalTableWidth}px` }}>
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const row = paginatedRows[virtualRow.index];
+                return (
+                  <div
+                    key={virtualRow.index}
+                    className={`table-row ${virtualRow.index % 2 === 0 ? 'even' : 'odd'}`}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: `${totalTableWidth}px`,
+                      height: `${virtualRow.size}px`,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    {row.map((cell, cellIdx) => {
+                      const width = columnWidths[cellIdx] || 200;
+                      const isNull = cell === null || cell === undefined;
+                      const isSelected = selectedCell?.row === virtualRow.index && selectedCell?.col === cellIdx;
+                      return (
+                        <div
+                          key={cellIdx}
+                          className={`table-cell ${isNull && showNullHighlight ? 'null-cell' : ''} ${isSelected ? 'selected' : ''}`}
+                          style={{ width: `${width}px` }}
+                          onClick={() => setSelectedCell({ row: virtualRow.index, col: cellIdx })}
+                        >
+                          {formatCell(cell, isNull)}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>

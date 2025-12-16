@@ -73,6 +73,7 @@ export interface QueryError {
 export interface QueryExecution {
   queries: { sql: string; startLine: number; endLine: number }[];
   results: (QueryResult | QueryError)[];
+  resultFilters: ColumnFilter[][]; // Filters for each result
   executedAt: Date;
 }
 

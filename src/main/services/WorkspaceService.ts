@@ -70,11 +70,13 @@ export class WorkspaceService {
   }
 
   async selectWorkspaceFolder(): Promise<string | null> {
+    console.log('selectWorkspaceFolder: Opening dialog...');
     const result = await dialog.showOpenDialog({
       title: 'Select Workspace Folder',
       properties: ['openDirectory', 'createDirectory'],
       message: 'Choose a folder to use as your SQL workspace',
     });
+    console.log('selectWorkspaceFolder: Dialog closed, result:', result);
 
     if (result.canceled || result.filePaths.length === 0) {
       return null;

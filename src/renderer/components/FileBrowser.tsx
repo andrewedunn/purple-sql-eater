@@ -54,10 +54,35 @@ export function FileBrowser({
     loadWorkspace();
   }, []);
 
-  // Reload file tree when workspace changes
+  // Reload file tree when workspace changes and set up folder watching
   useEffect(() => {
     if (workspace) {
       loadFileTree();
+
+      // Watch for changes in the workspace folder (if function exists)
+      if (typeof window.electron?.folderWatch === 'function') {
+        window.electron.folderWatch(workspace);
+      }
+
+      // Listen for folder-changed events
+      const handleFolderChanged = (_event: any, changedPath: string) => {
+        if (changedPath === workspace) {
+          loadFileTree();
+        }
+      };
+
+      if (window.electron?.ipcRenderer) {
+        window.electron.ipcRenderer.on('folder-changed', handleFolderChanged);
+      }
+
+      return () => {
+        if (typeof window.electron?.folderUnwatch === 'function') {
+          window.electron.folderUnwatch(workspace);
+        }
+        if (window.electron?.ipcRenderer) {
+          window.electron.ipcRenderer.removeListener('folder-changed', handleFolderChanged);
+        }
+      };
     }
   }, [workspace]);
 

@@ -128,16 +128,18 @@ export function getKeywordCompletions(
   monaco: typeof Monaco,
   range: Monaco.IRange
 ): CompletionItem[] {
-  return SQL_KEYWORDS.map(keyword =>
-    createCompletionItem(
+  return SQL_KEYWORDS.map(keyword => {
+    const item = createCompletionItem(
       keyword,
       monaco.languages.CompletionItemKind.Keyword,
       'SQL keyword',
       undefined,
       keyword,
       range
-    )
-  );
+    );
+    item.sortText = `2_${keyword.toLowerCase()}`;  // Sort after query columns (0) and functions (1)
+    return item;
+  });
 }
 
 /**
@@ -147,41 +149,56 @@ export function getFunctionCompletions(
   monaco: typeof Monaco,
   range: Monaco.IRange
 ): CompletionItem[] {
-  return BIGQUERY_FUNCTIONS.map(fn =>
-    createCompletionItem(
+  return BIGQUERY_FUNCTIONS.map(fn => {
+    const item = createCompletionItem(
       fn.name,
       monaco.languages.CompletionItemKind.Function,
       fn.signature,
       fn.description,
       fn.name,
       range
-    )
-  );
+    );
+    item.sortText = `1_${fn.name.toLowerCase()}`;  // Sort after query columns (0), before keywords (2)
+    return item;
+  });
 }
 
 /**
  * Get completion items for tables from schema
+ * If schemaFilter is provided, only show tables from that schema (and show just table name)
  */
 export function getTableCompletions(
   monaco: typeof Monaco,
   tables: Table[],
   range: Monaco.IRange,
-  recentTables: string[] = []
+  recentTables: string[] = [],
+  schemaFilter?: string
 ): CompletionItem[] {
   // Create a set of recent table names for quick lookup
   const recentSet = new Set(recentTables.map(t => t.toLowerCase()));
 
-  return tables.map(table => {
-    const fullName = table.schema ? `${table.schema}.${table.name}` : table.name;
+  // Filter tables by schema if specified
+  const filteredTables = schemaFilter
+    ? tables.filter(t => t.schema?.toLowerCase() === schemaFilter.toLowerCase())
+    : tables;
 
-    return createCompletionItem(
-      fullName,
+  return filteredTables.map(table => {
+    // If filtering by schema, just show table name (schema already typed)
+    const displayName = schemaFilter ? table.name : (table.schema ? `${table.schema}.${table.name}` : table.name);
+    const insertName = schemaFilter ? table.name : displayName;
+    const isRecent = recentSet.has(displayName.toLowerCase());
+
+    const item = createCompletionItem(
+      displayName,
       monaco.languages.CompletionItemKind.Class,
       table.type || 'TABLE',
       table.columnCount ? `${table.columnCount} columns` : undefined,
-      fullName,
+      insertName,
       range
     );
+    // Sort tables after columns/functions/keywords, but recent tables first within tables
+    item.sortText = isRecent ? `3_0_${displayName.toLowerCase()}` : `3_1_${displayName.toLowerCase()}`;
+    return item;
   }).sort((a, b) => {
     // Sort recent tables first
     const aRecent = recentSet.has((a.label as string).toLowerCase());
@@ -190,6 +207,26 @@ export function getTableCompletions(
     if (!aRecent && bRecent) return 1;
     return (a.label as string).localeCompare(b.label as string);
   });
+}
+
+/**
+ * Get unique schema/dataset names from tables
+ */
+export function getSchemaNames(tables: Table[]): string[] {
+  const schemas = new Set<string>();
+  for (const table of tables) {
+    if (table.schema) {
+      schemas.add(table.schema);
+    }
+  }
+  return Array.from(schemas);
+}
+
+/**
+ * Check if an identifier is a schema name
+ */
+export function isSchemaName(tables: Table[], identifier: string): boolean {
+  return tables.some(t => t.schema?.toLowerCase() === identifier.toLowerCase());
 }
 
 /**
@@ -203,11 +240,15 @@ export function getColumnCompletions(
 ): CompletionItem[] {
   // Find matching table (could be schema.table or just table name)
   const normalizedId = tableIdentifier.toLowerCase();
+  console.log('getColumnCompletions: Looking for table:', normalizedId);
+
   const matchingTable = tables.find(t => {
     const fullName = t.schema ? `${t.schema}.${t.name}` : t.name;
     return fullName.toLowerCase() === normalizedId ||
            t.name.toLowerCase() === normalizedId;
   });
+
+  console.log('getColumnCompletions: Found table:', matchingTable?.name, 'columns:', matchingTable?.columns?.length);
 
   if (!matchingTable || !matchingTable.columns) {
     return [];
@@ -236,6 +277,18 @@ export function extractTableBeforeDot(textBeforeCursor: string): string | null {
 }
 
 /**
+ * Check if cursor is in a SELECT clause (between SELECT and FROM)
+ */
+export function isInSelectClause(sql: string, cursorPosition: number): boolean {
+  const textBeforeCursor = sql.substring(0, cursorPosition).toUpperCase();
+  const lastSelect = textBeforeCursor.lastIndexOf('SELECT');
+  const lastFrom = textBeforeCursor.lastIndexOf('FROM');
+
+  // We're in SELECT clause if SELECT appears after the last FROM (or no FROM yet)
+  return lastSelect > lastFrom;
+}
+
+/**
  * Determine completion context from text before cursor
  */
 export function getCompletionContext(
@@ -248,13 +301,21 @@ export function getCompletionContext(
     return 'column';
   }
 
-  // After FROM or JOIN - table context
-  if (/\b(FROM|JOIN)\s*$/i.test(trimmed)) {
+  // Check if we're in a FROM/JOIN clause by looking for FROM/JOIN followed by
+  // optional table names, but NOT followed by WHERE/ON/GROUP/ORDER/HAVING/SELECT
+  // This handles: "FROM ", "FROM tab", "FROM schema.tab", "FROM t1, ", etc.
+  const fromJoinPattern = /\b(FROM|JOIN)\s+[\w.`"]*$/i;
+  if (fromJoinPattern.test(trimmed)) {
     return 'table';
   }
 
   // After comma in FROM/JOIN clause - table context
-  if (/\b(FROM|JOIN)\s+[\w.`"]+(\s*,\s*|\s+AS\s+\w+\s*,\s*)$/i.test(trimmed)) {
+  if (/\b(FROM|JOIN)\s+[\w.`"]+(\s*,\s*[\w.`"]*)$/i.test(trimmed)) {
+    return 'table';
+  }
+
+  // Just after FROM or JOIN keyword with space
+  if (/\b(FROM|JOIN)\s+$/i.test(trimmed)) {
     return 'table';
   }
 
@@ -264,6 +325,77 @@ export function getCompletionContext(
   }
 
   return 'none';
+}
+
+/**
+ * Extract all table references from SQL text (FROM and JOIN clauses)
+ * Returns array of table names (could be schema.table or just table)
+ */
+export function extractTablesFromQuery(sql: string): string[] {
+  const tables: string[] = [];
+
+  // Match FROM table [alias] patterns
+  const fromPattern = /\bFROM\s+([`"]?[\w]+[`"]?(?:\.[`"]?[\w]+[`"]?)?)/gi;
+  // Match JOIN table [alias] patterns
+  const joinPattern = /\bJOIN\s+([`"]?[\w]+[`"]?(?:\.[`"]?[\w]+[`"]?)?)/gi;
+
+  let match;
+  while ((match = fromPattern.exec(sql)) !== null) {
+    tables.push(match[1].replace(/[`"]/g, ''));
+  }
+
+  while ((match = joinPattern.exec(sql)) !== null) {
+    tables.push(match[1].replace(/[`"]/g, ''));
+  }
+
+  return tables;
+}
+
+/**
+ * Get column completions from multiple tables
+ * Groups columns by table for visual clarity, with high sort priority
+ */
+export function getMultiTableColumnCompletions(
+  monaco: typeof Monaco,
+  schemaTables: Table[],
+  tableNames: string[],
+  range: Monaco.IRange,
+  addComma: boolean = false
+): CompletionItem[] {
+  const completions: CompletionItem[] = [];
+  const suffix = addComma ? ',' : '';
+
+  for (const tableName of tableNames) {
+    const normalizedName = tableName.toLowerCase();
+
+    // Find matching table
+    const matchingTable = schemaTables.find(t => {
+      const fullName = t.schema ? `${t.schema}.${t.name}` : t.name;
+      return fullName.toLowerCase() === normalizedName ||
+             t.name.toLowerCase() === normalizedName;
+    });
+
+    if (matchingTable?.columns) {
+      const shortTableName = matchingTable.name;
+
+      for (const col of matchingTable.columns) {
+        const item = createCompletionItem(
+          col.name,
+          monaco.languages.CompletionItemKind.Field,
+          `${shortTableName}.${col.name}`,  // Show which table it's from
+          `${col.type}${col.nullable ? '' : ' NOT NULL'} — from ${shortTableName}`,
+          col.name + suffix,
+          range
+        );
+        // Use ! prefix to force query columns to sort first (! < all alphanumeric and space)
+        // This ensures columns from tables in the query appear above random table matches
+        item.sortText = `!${col.name.toLowerCase()}`;
+        completions.push(item);
+      }
+    }
+  }
+
+  return completions;
 }
 
 /**
