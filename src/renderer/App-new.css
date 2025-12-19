@@ -286,6 +286,42 @@
   opacity: 0.5;
 }
 
+/* Resize handle between editor and results */
+.resize-handle-horizontal {
+  height: 6px;
+  width: 100%;
+  cursor: row-resize;
+  background: transparent;
+  flex-shrink: 0;
+  z-index: 50;
+  position: relative;
+}
+
+.resize-handle-horizontal::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--color-border);
+  opacity: 0.5;
+  transition: opacity var(--transition-fast);
+}
+
+.resize-handle-horizontal:hover::before,
+.resize-handle-horizontal.active::before {
+  background: var(--color-accent);
+  opacity: 1;
+}
+
+.resize-handle-horizontal:hover,
+.resize-handle-horizontal.active {
+  background: var(--color-accent-light);
+}
+
 .main-panel {
   flex: 1;
   display: flex;
@@ -294,7 +330,6 @@
 }
 
 .editor-container {
-  flex: 1;
   min-height: 0;
   border-bottom: 1px solid var(--color-border);
   background-color: var(--color-surface);
@@ -346,7 +381,6 @@
 }
 
 .results-container {
-  flex: 1;
   min-height: 0;
   overflow: hidden;
   background-color: var(--color-bg);

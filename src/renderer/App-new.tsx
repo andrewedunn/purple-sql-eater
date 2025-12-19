@@ -106,10 +106,13 @@ function App() {
   const [isResizingFile, setIsResizingFile] = useState(false);
   const [isResizingStacked, setIsResizingStacked] = useState(false);
   const [isResizingBrowsers, setIsResizingBrowsers] = useState(false);
+  const [isResizingEditorResults, setIsResizingEditorResults] = useState(false);
+  const [editorResultsRatio, setEditorResultsRatio] = useState(0.5);
   const resizeStartX = useRef(0);
   const resizeStartY = useRef(0);
   const resizeStartWidth = useRef(0);
   const resizeStartRatio = useRef(0.5);
+  const mainPanelRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof Monaco | null>(null);
   const [schemaTables, setSchemaTables] = useState<import('../shared/types').Table[]>([]);
@@ -657,6 +660,13 @@ function App() {
     resizeStartRatio.current = browserSplitRatio;
   };
 
+  const handleEditorResultsResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingEditorResults(true);
+    resizeStartY.current = e.clientY;
+    resizeStartRatio.current = editorResultsRatio;
+  };
+
   useEffect(() => {
     if (!isResizingSchema) return;
 
@@ -754,6 +764,33 @@ function App() {
       document.removeEventListener('mouseup', handleMouseUp);
     };
   }, [isResizingBrowsers]);
+
+  useEffect(() => {
+    if (!isResizingEditorResults) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const container = mainPanelRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const deltaY = e.clientY - resizeStartY.current;
+      const containerHeight = rect.height;
+      const deltaRatio = deltaY / containerHeight;
+      const newRatio = Math.max(0.15, Math.min(0.85, resizeStartRatio.current + deltaRatio));
+      setEditorResultsRatio(newRatio);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingEditorResults(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingEditorResults]);
 
   // Warn before closing window with unsaved changes
   useEffect(() => {
@@ -899,8 +936,8 @@ function App() {
   );
 
   const renderMainPanel = () => (
-    <div className="main-panel">
-      <div className="editor-container">
+    <div className="main-panel" ref={mainPanelRef}>
+      <div className="editor-container" style={{ flex: `0 0 ${editorResultsRatio * 100}%` }}>
         {activeTab.filePath && changedFiles.has(activeTab.filePath) && (
           <div className="file-changed-banner">
             <span>This file was changed externally.</span>
@@ -1072,7 +1109,12 @@ function App() {
         />
       </div>
 
-      <div className="results-container">
+      <div
+        className={`resize-handle-horizontal ${isResizingEditorResults ? 'active' : ''}`}
+        onMouseDown={handleEditorResultsResizeStart}
+      />
+
+      <div className="results-container" style={{ flex: `0 0 ${(1 - editorResultsRatio) * 100}%` }}>
         {error && <div className="error">{error}</div>}
 
         {activeTab.results && (
