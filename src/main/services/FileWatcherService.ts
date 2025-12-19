@@ -65,7 +65,9 @@ export class FileWatcherService {
     });
 
     watcher.on('change', () => {
-      if (this.window && !this.isPathSuppressed(filePath)) {
+      const isSuppressed = this.isPathSuppressed(filePath);
+      console.log(`[FileWatcher] Change detected: ${filePath}, suppressed: ${isSuppressed}`);
+      if (this.window && !isSuppressed) {
         this.window.webContents.send('file-changed', filePath);
       }
     });

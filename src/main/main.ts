@@ -261,11 +261,17 @@ handleIPC('file-write', async (_event, filePath: string, content: string) => {
   validateFilePath(filePath);
   // Suppress file watcher notifications during our own writes
   fileWatcherService.suppressPath(filePath);
+  console.log(`[FileWatcher] Suppressed: ${filePath}`);
   try {
     await fileSystemService.writeFile(filePath, content);
+    console.log(`[FileWatcher] Write complete: ${filePath}`);
   } finally {
     // Delay unsuppression to allow file system events to settle
-    setTimeout(() => fileWatcherService.unsuppressPath(filePath), 500);
+    // chokidar has 300ms stabilityThreshold, plus write time, so use 1500ms to be safe
+    setTimeout(() => {
+      fileWatcherService.unsuppressPath(filePath);
+      console.log(`[FileWatcher] Unsuppressed: ${filePath}`);
+    }, 1500);
   }
 });
 
