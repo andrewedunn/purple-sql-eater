@@ -246,8 +246,10 @@ function App() {
     }
   };
 
-  const handleExecute = async () => {
+  const handleExecute = async (modeOverride?: ExecutionMode) => {
     if (!isConnected || !activeTab || !editorRef.current) return;
+
+    const mode = modeOverride ?? executionMode;
 
     setError(null);
     setIsExecuting(true);
@@ -275,7 +277,7 @@ function App() {
             endLine: selection.startLineNumber + q.endLine - 1,
           }));
         }
-      } else if (executionMode === 'current' && position) {
+      } else if (mode === 'current' && position) {
         // Run query at cursor position
         const query = getQueryAtPosition(activeTab.sql, position.lineNumber, position.column);
         if (query) {
@@ -369,12 +371,7 @@ function App() {
     };
     executeAllRef.current = () => {
       if (isConnected && !isExecuting) {
-        const originalMode = executionMode;
-        setExecutionMode('all');
-        setTimeout(() => {
-          handleExecute();
-          setExecutionMode(originalMode);
-        }, 0);
+        handleExecute('all');
       }
     };
   });
@@ -387,13 +384,8 @@ function App() {
         if (!isConnected || isExecuting) return;
 
         if (e.shiftKey) {
-          // Cmd+Shift+Enter: Execute All - temporarily set mode to 'all'
-          const originalMode = executionMode;
-          setExecutionMode('all');
-          setTimeout(() => {
-            handleExecute();
-            setExecutionMode(originalMode);
-          }, 0);
+          // Cmd+Shift+Enter: Execute All
+          handleExecute('all');
         } else {
           // Cmd+Enter: Execute based on current mode
           handleExecute();
