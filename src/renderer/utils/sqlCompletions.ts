@@ -122,6 +122,52 @@ function createCompletionItem(
 }
 
 /**
+ * Check if the cursor position is inside a SQL comment.
+ * Handles both single-line (--) and multi-line block comments.
+ */
+export function isInComment(fullText: string, cursorOffset: number): boolean {
+  const textBeforeCursor = fullText.substring(0, cursorOffset);
+
+  // Check for single-line comment: -- to end of line
+  const lastNewline = textBeforeCursor.lastIndexOf('\n');
+  const currentLine = textBeforeCursor.substring(lastNewline + 1);
+
+  // Check if there's a -- on this line before the cursor (not inside a string)
+  let inString = false;
+  let stringChar = '';
+  for (let i = 0; i < currentLine.length; i++) {
+    const char = currentLine[i];
+    if (inString) {
+      if (char === stringChar && currentLine[i - 1] !== '\\') {
+        inString = false;
+      }
+    } else {
+      if (char === "'" || char === '"') {
+        inString = true;
+        stringChar = char;
+      } else if (char === '-' && currentLine[i + 1] === '-') {
+        return true; // Found -- outside of string
+      }
+    }
+  }
+
+  // Check for multi-line comment: count /* and */ pairs
+  let depth = 0;
+  for (let i = 0; i < textBeforeCursor.length - 1; i++) {
+    const twoChars = textBeforeCursor.substring(i, i + 2);
+    if (twoChars === '/*') {
+      depth++;
+      i++; // Skip next char
+    } else if (twoChars === '*/') {
+      depth = Math.max(0, depth - 1);
+      i++; // Skip next char
+    }
+  }
+
+  return depth > 0;
+}
+
+/**
  * Get completion items for SQL keywords
  */
 export function getKeywordCompletions(

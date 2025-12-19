@@ -26,6 +26,7 @@ import {
   extractTablesFromQuery,
   getMultiTableColumnCompletions,
   isInSelectClause,
+  isInComment,
 } from './utils/sqlCompletions';
 import './design-system.css';
 import './App-new.css';
@@ -921,6 +922,14 @@ function App() {
             monaco.languages.registerCompletionItemProvider('sql', {
               triggerCharacters: ['.', ' '],
               provideCompletionItems: (model: Monaco.editor.ITextModel, position: Monaco.Position) => {
+                const fullText = model.getValue();
+                const cursorOffset = model.getOffsetAt(position);
+
+                // Don't provide completions inside comments
+                if (isInComment(fullText, cursorOffset)) {
+                  return { suggestions: [] };
+                }
+
                 const word = model.getWordUntilPosition(position);
                 const range = {
                   startLineNumber: position.lineNumber,
