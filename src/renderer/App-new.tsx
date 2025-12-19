@@ -114,6 +114,8 @@ function App() {
   const [schemaTables, setSchemaTables] = useState<import('../shared/types').Table[]>([]);
   const schemaTablesRef = useRef<import('../shared/types').Table[]>([]);
   const recentTablesRef = useRef<string[]>([]);
+  const executeRef = useRef<() => void>(() => {});
+  const executeAllRef = useRef<() => void>(() => {});
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
@@ -353,6 +355,25 @@ function App() {
       setIsExecuting(false);
     }
   };
+
+  // Keep refs updated for Monaco editor actions (avoids stale closure issue)
+  useEffect(() => {
+    executeRef.current = () => {
+      if (isConnected && !isExecuting) {
+        handleExecute();
+      }
+    };
+    executeAllRef.current = () => {
+      if (isConnected && !isExecuting) {
+        const originalMode = executionMode;
+        setExecutionMode('all');
+        setTimeout(() => {
+          handleExecute();
+          setExecutionMode(originalMode);
+        }, 0);
+      }
+    };
+  });
 
   // Keyboard shortcuts - must be after handleExecute is defined
   useEffect(() => {
@@ -992,17 +1013,14 @@ function App() {
             editorRef.current = editor;
 
             // Add Cmd/Ctrl+Enter keybinding to execute query
+            // Uses ref to avoid stale closure issue
             editor.addAction({
               id: 'execute-query',
               label: 'Execute Query',
               keybindings: [
                 monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
               ],
-              run: () => {
-                if (isConnected && !isExecuting) {
-                  handleExecute();
-                }
-              },
+              run: () => executeRef.current(),
             });
 
             // Add Cmd/Ctrl+Shift+Enter keybinding to execute all queries
@@ -1012,17 +1030,7 @@ function App() {
               keybindings: [
                 monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter,
               ],
-              run: () => {
-                if (isConnected && !isExecuting) {
-                  // Temporarily switch to 'all' mode and execute
-                  const originalMode = executionMode;
-                  setExecutionMode('all');
-                  setTimeout(() => {
-                    handleExecute();
-                    setExecutionMode(originalMode);
-                  }, 0);
-                }
-              },
+              run: () => executeAllRef.current(),
             });
           }}
           options={{
