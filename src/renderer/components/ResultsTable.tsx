@@ -27,6 +27,14 @@ interface SelectedCell {
   col: number;
 }
 
+interface ContextMenuState {
+  visible: boolean;
+  x: number;
+  y: number;
+  row: number;
+  col: number;
+}
+
 // Determine if a value looks like a number
 function isNumericColumn(rows: unknown[][], columnIndex: number): boolean {
   let numericCount = 0;
@@ -101,6 +109,13 @@ export function ResultsTable({ results, filters, onFiltersChange, onExportCSV, o
   const [filterMenuAnchor, setFilterMenuAnchor] = useState<HTMLElement | null>(null);
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
   const [showNullHighlight, setShowNullHighlight] = useState(false);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>({
+    visible: false,
+    x: 0,
+    y: 0,
+    row: 0,
+    col: 0,
+  });
 
   // Use filters from props
   const columnFilters = filters;
@@ -234,6 +249,32 @@ export function ResultsTable({ results, filters, onFiltersChange, onExportCSV, o
     navigator.clipboard.writeText(text);
   }, [paginatedRows, formatValueForCopy]);
 
+  // Handle right-click context menu
+  const handleContextMenu = useCallback((e: React.MouseEvent, row: number, col: number) => {
+    e.preventDefault();
+    setSelectedCell({ row, col });
+    setContextMenu({
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+      row,
+      col,
+    });
+  }, []);
+
+  // Close context menu
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(prev => ({ ...prev, visible: false }));
+  }, []);
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    if (!contextMenu.visible) return;
+    const handleClick = () => closeContextMenu();
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [contextMenu.visible, closeContextMenu]);
+
   // Keyboard navigation
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (!selectedCell) return;
@@ -266,7 +307,8 @@ export function ResultsTable({ results, filters, onFiltersChange, onExportCSV, o
       case 'c':
         if (e.metaKey || e.ctrlKey) {
           e.preventDefault();
-          copyRowValue(row);
+          // Copy just the selected cell, not the whole row
+          copyCellValue(row, col);
         }
         break;
       case 'Escape':
@@ -536,6 +578,7 @@ export function ResultsTable({ results, filters, onFiltersChange, onExportCSV, o
                           className={`table-cell ${isNull && showNullHighlight ? 'null-cell' : ''} ${isSelected ? 'selected' : ''}`}
                           style={{ width: `${width}px` }}
                           onClick={() => setSelectedCell({ row: virtualRow.index, col: cellIdx })}
+                          onContextMenu={(e) => handleContextMenu(e, virtualRow.index, cellIdx)}
                         >
                           {formatCell(cell, isNull)}
                         </div>
@@ -642,6 +685,49 @@ export function ResultsTable({ results, filters, onFiltersChange, onExportCSV, o
           </div>
         </div>
       </div>
+
+      {/* Context menu */}
+      {contextMenu.visible && (
+        <div
+          className="results-context-menu"
+          style={{
+            position: 'fixed',
+            left: contextMenu.x,
+            top: contextMenu.y,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="context-menu-item"
+            onClick={() => {
+              copyCellValue(contextMenu.row, contextMenu.col);
+              closeContextMenu();
+            }}
+          >
+            Copy Cell
+          </button>
+          <button
+            className="context-menu-item"
+            onClick={() => {
+              copyRowValue(contextMenu.row);
+              closeContextMenu();
+            }}
+          >
+            Copy Row
+          </button>
+          {onCopyToClipboard && (
+            <button
+              className="context-menu-item"
+              onClick={() => {
+                onCopyToClipboard();
+                closeContextMenu();
+              }}
+            >
+              Copy All
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
