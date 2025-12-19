@@ -8,9 +8,46 @@ export class FileWatcherService {
   private watchers: Map<string, FSWatcher> = new Map();
   private folderWatchers: Map<string, FSWatcher> = new Map();
   private window: BrowserWindow | null = null;
+  private suppressedPaths: Set<string> = new Set();
 
   setWindow(window: BrowserWindow): void {
     this.window = window;
+  }
+
+  /**
+   * Suppress file watcher notifications for a path.
+   * Use this before making changes to a file from within the app.
+   */
+  suppressPath(filePath: string): void {
+    this.suppressedPaths.add(filePath);
+  }
+
+  /**
+   * Re-enable notifications for a path after suppression.
+   */
+  unsuppressPath(filePath: string): void {
+    this.suppressedPaths.delete(filePath);
+  }
+
+  /**
+   * Check if a path is currently suppressed.
+   */
+  isPathSuppressed(filePath: string): boolean {
+    return this.suppressedPaths.has(filePath);
+  }
+
+  /**
+   * Update a watched file path (used when renaming).
+   * Transfers the watcher from oldPath to newPath without triggering events.
+   */
+  updateWatchedPath(oldPath: string, newPath: string): void {
+    const watcher = this.watchers.get(oldPath);
+    if (watcher) {
+      watcher.close();
+      this.watchers.delete(oldPath);
+      // Start watching the new path
+      this.watchFile(newPath);
+    }
   }
 
   watchFile(filePath: string): void {
@@ -28,13 +65,15 @@ export class FileWatcherService {
     });
 
     watcher.on('change', () => {
-      if (this.window) {
+      const isSuppressed = this.isPathSuppressed(filePath);
+      console.log(`[FileWatcher] Change detected: ${filePath}, suppressed: ${isSuppressed}`);
+      if (this.window && !isSuppressed) {
         this.window.webContents.send('file-changed', filePath);
       }
     });
 
     watcher.on('unlink', () => {
-      if (this.window) {
+      if (this.window && !this.isPathSuppressed(filePath)) {
         this.window.webContents.send('file-deleted', filePath);
       }
       this.unwatchFile(filePath);

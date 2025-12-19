@@ -26,6 +26,7 @@ import {
   extractTablesFromQuery,
   getMultiTableColumnCompletions,
   isInSelectClause,
+  isInComment,
 } from './utils/sqlCompletions';
 import './design-system.css';
 import './App-new.css';
@@ -105,15 +106,20 @@ function App() {
   const [isResizingFile, setIsResizingFile] = useState(false);
   const [isResizingStacked, setIsResizingStacked] = useState(false);
   const [isResizingBrowsers, setIsResizingBrowsers] = useState(false);
+  const [isResizingEditorResults, setIsResizingEditorResults] = useState(false);
+  const [editorResultsRatio, setEditorResultsRatio] = useState(0.5);
   const resizeStartX = useRef(0);
   const resizeStartY = useRef(0);
   const resizeStartWidth = useRef(0);
   const resizeStartRatio = useRef(0.5);
+  const mainPanelRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof Monaco | null>(null);
   const [schemaTables, setSchemaTables] = useState<import('../shared/types').Table[]>([]);
   const schemaTablesRef = useRef<import('../shared/types').Table[]>([]);
   const recentTablesRef = useRef<string[]>([]);
+  const executeRef = useRef<() => void>(() => {});
+  const executeAllRef = useRef<() => void>(() => {});
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
@@ -240,8 +246,10 @@ function App() {
     }
   };
 
-  const handleExecute = async () => {
+  const handleExecute = async (modeOverride?: ExecutionMode) => {
     if (!isConnected || !activeTab || !editorRef.current) return;
+
+    const mode = modeOverride ?? executionMode;
 
     setError(null);
     setIsExecuting(true);
@@ -269,7 +277,7 @@ function App() {
             endLine: selection.startLineNumber + q.endLine - 1,
           }));
         }
-      } else if (executionMode === 'current' && position) {
+      } else if (mode === 'current' && position) {
         // Run query at cursor position
         const query = getQueryAtPosition(activeTab.sql, position.lineNumber, position.column);
         if (query) {
@@ -354,6 +362,20 @@ function App() {
     }
   };
 
+  // Keep refs updated for Monaco editor actions (avoids stale closure issue)
+  useEffect(() => {
+    executeRef.current = () => {
+      if (isConnected && !isExecuting) {
+        handleExecute();
+      }
+    };
+    executeAllRef.current = () => {
+      if (isConnected && !isExecuting) {
+        handleExecute('all');
+      }
+    };
+  });
+
   // Keyboard shortcuts - must be after handleExecute is defined
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -362,13 +384,8 @@ function App() {
         if (!isConnected || isExecuting) return;
 
         if (e.shiftKey) {
-          // Cmd+Shift+Enter: Execute All - temporarily set mode to 'all'
-          const originalMode = executionMode;
-          setExecutionMode('all');
-          setTimeout(() => {
-            handleExecute();
-            setExecutionMode(originalMode);
-          }, 0);
+          // Cmd+Shift+Enter: Execute All
+          handleExecute('all');
         } else {
           // Cmd+Enter: Execute based on current mode
           handleExecute();
@@ -635,6 +652,13 @@ function App() {
     resizeStartRatio.current = browserSplitRatio;
   };
 
+  const handleEditorResultsResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingEditorResults(true);
+    resizeStartY.current = e.clientY;
+    resizeStartRatio.current = editorResultsRatio;
+  };
+
   useEffect(() => {
     if (!isResizingSchema) return;
 
@@ -733,6 +757,33 @@ function App() {
     };
   }, [isResizingBrowsers]);
 
+  useEffect(() => {
+    if (!isResizingEditorResults) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const container = mainPanelRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const deltaY = e.clientY - resizeStartY.current;
+      const containerHeight = rect.height;
+      const deltaRatio = deltaY / containerHeight;
+      const newRatio = Math.max(0.15, Math.min(0.85, resizeStartRatio.current + deltaRatio));
+      setEditorResultsRatio(newRatio);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingEditorResults(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingEditorResults]);
+
   // Warn before closing window with unsaved changes
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -791,13 +842,27 @@ function App() {
       }
     };
 
+    const handleFileRenamed = (_event: any, oldPath: string, newPath: string) => {
+      // Update any tab that references the old path
+      setTabs(prevTabs => prevTabs.map(tab => {
+        if (tab.filePath === oldPath) {
+          // Extract new filename for title
+          const newName = newPath.split('/').pop() || newPath;
+          return { ...tab, filePath: newPath, title: newName };
+        }
+        return tab;
+      }));
+    };
+
     if (window.electron.ipcRenderer) {
       window.electron.ipcRenderer.on('file-changed', handleFileChanged);
       window.electron.ipcRenderer.on('file-deleted', handleFileDeleted);
+      window.electron.ipcRenderer.on('file-renamed', handleFileRenamed);
 
       return () => {
         window.electron.ipcRenderer?.removeListener('file-changed', handleFileChanged);
         window.electron.ipcRenderer?.removeListener('file-deleted', handleFileDeleted);
+        window.electron.ipcRenderer?.removeListener('file-renamed', handleFileRenamed);
       };
     }
   }, []); // Empty deps - only run on mount/unmount
@@ -863,8 +928,8 @@ function App() {
   );
 
   const renderMainPanel = () => (
-    <div className="main-panel">
-      <div className="editor-container">
+    <div className="main-panel" ref={mainPanelRef}>
+      <div className="editor-container" style={{ flex: `0 0 ${editorResultsRatio * 100}%` }}>
         {activeTab.filePath && changedFiles.has(activeTab.filePath) && (
           <div className="file-changed-banner">
             <span>This file was changed externally.</span>
@@ -900,6 +965,14 @@ function App() {
             monaco.languages.registerCompletionItemProvider('sql', {
               triggerCharacters: ['.', ' '],
               provideCompletionItems: (model: Monaco.editor.ITextModel, position: Monaco.Position) => {
+                const fullText = model.getValue();
+                const cursorOffset = model.getOffsetAt(position);
+
+                // Don't provide completions inside comments
+                if (isInComment(fullText, cursorOffset)) {
+                  return { suggestions: [] };
+                }
+
                 const word = model.getWordUntilPosition(position);
                 const range = {
                   startLineNumber: position.lineNumber,
@@ -992,17 +1065,14 @@ function App() {
             editorRef.current = editor;
 
             // Add Cmd/Ctrl+Enter keybinding to execute query
+            // Uses ref to avoid stale closure issue
             editor.addAction({
               id: 'execute-query',
               label: 'Execute Query',
               keybindings: [
                 monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
               ],
-              run: () => {
-                if (isConnected && !isExecuting) {
-                  handleExecute();
-                }
-              },
+              run: () => executeRef.current(),
             });
 
             // Add Cmd/Ctrl+Shift+Enter keybinding to execute all queries
@@ -1012,17 +1082,7 @@ function App() {
               keybindings: [
                 monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter,
               ],
-              run: () => {
-                if (isConnected && !isExecuting) {
-                  // Temporarily switch to 'all' mode and execute
-                  const originalMode = executionMode;
-                  setExecutionMode('all');
-                  setTimeout(() => {
-                    handleExecute();
-                    setExecutionMode(originalMode);
-                  }, 0);
-                }
-              },
+              run: () => executeAllRef.current(),
             });
           }}
           options={{
@@ -1041,7 +1101,12 @@ function App() {
         />
       </div>
 
-      <div className="results-container">
+      <div
+        className={`resize-handle-horizontal ${isResizingEditorResults ? 'active' : ''}`}
+        onMouseDown={handleEditorResultsResizeStart}
+      />
+
+      <div className="results-container" style={{ flex: `0 0 ${(1 - editorResultsRatio) * 100}%` }}>
         {error && <div className="error">{error}</div>}
 
         {activeTab.results && (
