@@ -813,13 +813,27 @@ function App() {
       }
     };
 
+    const handleFileRenamed = (_event: any, oldPath: string, newPath: string) => {
+      // Update any tab that references the old path
+      setTabs(prevTabs => prevTabs.map(tab => {
+        if (tab.filePath === oldPath) {
+          // Extract new filename for title
+          const newName = newPath.split('/').pop() || newPath;
+          return { ...tab, filePath: newPath, title: newName };
+        }
+        return tab;
+      }));
+    };
+
     if (window.electron.ipcRenderer) {
       window.electron.ipcRenderer.on('file-changed', handleFileChanged);
       window.electron.ipcRenderer.on('file-deleted', handleFileDeleted);
+      window.electron.ipcRenderer.on('file-renamed', handleFileRenamed);
 
       return () => {
         window.electron.ipcRenderer?.removeListener('file-changed', handleFileChanged);
         window.electron.ipcRenderer?.removeListener('file-deleted', handleFileDeleted);
+        window.electron.ipcRenderer?.removeListener('file-renamed', handleFileRenamed);
       };
     }
   }, []); // Empty deps - only run on mount/unmount

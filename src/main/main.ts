@@ -259,7 +259,14 @@ handleIPC('file-read', async (_event, filePath: string) => {
 
 handleIPC('file-write', async (_event, filePath: string, content: string) => {
   validateFilePath(filePath);
-  await fileSystemService.writeFile(filePath, content);
+  // Suppress file watcher notifications during our own writes
+  fileWatcherService.suppressPath(filePath);
+  try {
+    await fileSystemService.writeFile(filePath, content);
+  } finally {
+    // Delay unsuppression to allow file system events to settle
+    setTimeout(() => fileWatcherService.unsuppressPath(filePath), 500);
+  }
 });
 
 handleIPC('file-create', async (_event, filePath: string, content?: string) => {
@@ -275,7 +282,19 @@ handleIPC('file-delete', async (_event, filePath: string) => {
 handleIPC('file-rename', async (_event, oldPath: string, newPath: string) => {
   validateFilePath(oldPath);
   validateFilePath(newPath);
-  await fileSystemService.renameFile(oldPath, newPath);
+  // Suppress file watcher for the old path to prevent "deleted" notification
+  fileWatcherService.suppressPath(oldPath);
+  try {
+    await fileSystemService.renameFile(oldPath, newPath);
+    // Update the watcher to track the new path
+    fileWatcherService.updateWatchedPath(oldPath, newPath);
+    // Notify renderer of the rename so it can update tab/file references
+    if (mainWindow) {
+      mainWindow.webContents.send('file-renamed', oldPath, newPath);
+    }
+  } finally {
+    setTimeout(() => fileWatcherService.unsuppressPath(oldPath), 500);
+  }
 });
 
 handleIPC('folder-create', async (_event, folderPath: string) => {
