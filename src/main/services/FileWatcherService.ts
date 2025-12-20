@@ -79,6 +79,11 @@ export class FileWatcherService {
       this.unwatchFile(filePath);
     });
 
+    watcher.on('error', (error) => {
+      console.error(`[FileWatcher] Error watching file ${filePath}:`, error);
+      this.unwatchFile(filePath);
+    });
+
     this.watchers.set(filePath, watcher);
   }
 
@@ -121,6 +126,11 @@ export class FileWatcherService {
     watcher.on('unlink', notifyChange);
     watcher.on('addDir', notifyChange);
     watcher.on('unlinkDir', notifyChange);
+
+    watcher.on('error', (error) => {
+      console.error(`[FileWatcher] Error watching folder ${folderPath}:`, error);
+      this.unwatchFolder(folderPath);
+    });
 
     this.folderWatchers.set(folderPath, watcher);
   }

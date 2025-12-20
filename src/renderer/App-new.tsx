@@ -277,15 +277,18 @@ function App() {
             endLine: selection.startLineNumber + q.endLine - 1,
           }));
         }
-      } else if (mode === 'current' && position) {
-        // Run query at cursor position
-        const query = getQueryAtPosition(activeTab.sql, position.lineNumber, position.column);
-        if (query) {
-          queriesToRun = [query];
-        }
-      } else {
+      } else if (mode === 'all') {
         // Run all queries
         queriesToRun = splitQueries(activeTab.sql);
+      } else {
+        // Run query at cursor position (mode === 'current')
+        if (position) {
+          const query = getQueryAtPosition(activeTab.sql, position.lineNumber, position.column);
+          if (query) {
+            queriesToRun = [query];
+          }
+        }
+        // If no position or no query found, queriesToRun stays empty -> "No query to execute"
       }
 
       if (queriesToRun.length === 0) {
@@ -1191,7 +1194,7 @@ function App() {
             // Single query: simple execute button
             <button
               className="btn-execute btn-execute-single"
-              onClick={handleExecute}
+              onClick={() => handleExecute()}
               disabled={isExecuting || !isConnected}
               title={`Execute query (${modKey}${enterKey})`}
             >
@@ -1203,7 +1206,7 @@ function App() {
             <>
               <button
                 className="btn-execute"
-                onClick={handleExecute}
+                onClick={() => handleExecute()}
                 disabled={isExecuting || !isConnected}
                 title={executionMode === 'current' ? `Execute current query (${modKey}${enterKey})` : `Execute all queries (${modKey}${enterKey})`}
               >

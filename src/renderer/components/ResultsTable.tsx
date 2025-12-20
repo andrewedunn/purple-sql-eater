@@ -236,17 +236,25 @@ export function ResultsTable({ results, filters, onFiltersChange, onExportCSV, o
   }, []);
 
   // Copy cell value to clipboard
-  const copyCellValue = useCallback((row: number, col: number) => {
+  const copyCellValue = useCallback(async (row: number, col: number) => {
     const value = paginatedRows[row]?.[col];
-    navigator.clipboard.writeText(formatValueForCopy(value));
+    try {
+      await navigator.clipboard.writeText(formatValueForCopy(value));
+    } catch (error) {
+      console.error('Failed to copy cell to clipboard:', error);
+    }
   }, [paginatedRows, formatValueForCopy]);
 
   // Copy entire row to clipboard
-  const copyRowValue = useCallback((row: number) => {
+  const copyRowValue = useCallback(async (row: number) => {
     const rowData = paginatedRows[row];
     if (!rowData) return;
     const text = rowData.map((cell) => formatValueForCopy(cell)).join('\t');
-    navigator.clipboard.writeText(text);
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (error) {
+      console.error('Failed to copy row to clipboard:', error);
+    }
   }, [paginatedRows, formatValueForCopy]);
 
   // Handle right-click context menu
@@ -315,7 +323,7 @@ export function ResultsTable({ results, filters, onFiltersChange, onExportCSV, o
         setSelectedCell(null);
         break;
     }
-  }, [selectedCell, paginatedRows.length, results.columns.length, copyCellValue, copyRowValue]);
+  }, [selectedCell, paginatedRows.length, results.columns.length, copyCellValue]);
 
   // Column resize effect
   useEffect(() => {

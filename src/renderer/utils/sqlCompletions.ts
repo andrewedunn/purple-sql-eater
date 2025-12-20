@@ -138,8 +138,13 @@ export function isInComment(fullText: string, cursorOffset: number): boolean {
   for (let i = 0; i < currentLine.length; i++) {
     const char = currentLine[i];
     if (inString) {
-      if (char === stringChar && currentLine[i - 1] !== '\\') {
-        inString = false;
+      if (char === stringChar) {
+        // SQL escapes quotes by doubling them, not with backslash
+        if (currentLine[i + 1] === stringChar) {
+          i++; // Skip the escaped quote
+        } else {
+          inString = false;
+        }
       }
     } else {
       if (char === "'" || char === '"') {
