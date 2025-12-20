@@ -15,6 +15,8 @@ import { ResultsTable } from './components/ResultsTable';
 import { ResultsTabs } from './components/ResultsTabs';
 import { extractTableNames } from './utils/sqlParser';
 import { splitQueries, getQueryAtPosition, ParsedQuery } from './utils/sqlSplitter';
+import { formatSQL } from './utils/sqlFormatter';
+import * as XLSX from 'xlsx';
 import {
   getKeywordCompletions,
   getFunctionCompletions,
@@ -73,6 +75,8 @@ function App() {
   const [executionStatus, setExecutionStatus] = useState<string | null>(null);
   const [activeTabId, setActiveTabId] = useState('1');
   const [isExecuting, setIsExecuting] = useState(false);
+  const [executionStartTime, setExecutionStartTime] = useState<number | null>(null);
+  const [elapsedTime, setElapsedTime] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [currentConnection, setCurrentConnection] = useState<ConnectionListItem | null>(null);
@@ -120,6 +124,7 @@ function App() {
   const recentTablesRef = useRef<string[]>([]);
   const executeRef = useRef<() => void>(() => {});
   const executeAllRef = useRef<() => void>(() => {});
+  const formatRef = useRef<() => void>(() => {});
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
@@ -253,6 +258,7 @@ function App() {
 
     setError(null);
     setIsExecuting(true);
+    setExecutionStartTime(Date.now());
     setQuerySuccess(false);
     setExecutionStatus(null);
 
@@ -362,8 +368,23 @@ function App() {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setIsExecuting(false);
+      setExecutionStartTime(null);
     }
   };
+
+  // Track elapsed time during query execution
+  useEffect(() => {
+    if (!isExecuting || !executionStartTime) {
+      setElapsedTime(0);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setElapsedTime(Date.now() - executionStartTime);
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [isExecuting, executionStartTime]);
 
   // Keep refs updated for Monaco editor actions (avoids stale closure issue)
   useEffect(() => {
@@ -375,6 +396,23 @@ function App() {
     executeAllRef.current = () => {
       if (isConnected && !isExecuting) {
         handleExecute('all');
+      }
+    };
+    formatRef.current = () => {
+      if (!editorRef.current) return;
+      const editor = editorRef.current;
+      const model = editor.getModel();
+      if (!model) return;
+
+      const sql = model.getValue();
+      const formatted = formatSQL(sql);
+      if (formatted !== sql) {
+        // Preserve cursor position roughly
+        const position = editor.getPosition();
+        model.setValue(formatted);
+        if (position) {
+          editor.setPosition(position);
+        }
       }
     };
   });
@@ -487,6 +525,60 @@ function App() {
     a.download = `query-results-${Date.now()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportExcel = () => {
+    if (!activeTab.results) return;
+
+    const workbook = XLSX.utils.book_new();
+    const execution = activeTab.results;
+
+    // Add a sheet for each result
+    execution.results.forEach((result, index) => {
+      if ('error' in result) {
+        // Create error sheet
+        const errorData = [
+          ['Error'],
+          [result.error],
+          [''],
+          ['Query'],
+          [result.query],
+        ];
+        const errorSheet = XLSX.utils.aoa_to_sheet(errorData);
+        XLSX.utils.book_append_sheet(workbook, errorSheet, `Error ${index + 1}`);
+      } else {
+        // Create data sheet with headers and rows
+        const sheetData = [
+          result.columns,
+          ...result.rows.map((row: unknown[]) =>
+            row.map((cell: unknown) => {
+              if (cell === null || cell === undefined) return '';
+              if (typeof cell === 'object') return JSON.stringify(cell);
+              return cell;
+            })
+          ),
+        ];
+        const sheet = XLSX.utils.aoa_to_sheet(sheetData);
+        const sheetName = execution.results.length === 1 ? 'Results' : `Results ${index + 1}`;
+        XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+      }
+    });
+
+    // Add query sheet
+    const queryData = [
+      ['Queries'],
+      [''],
+      ...execution.queries.map((q, i) => [
+        execution.queries.length > 1 ? `-- Query ${i + 1}` : '',
+        q.sql,
+        '',
+      ]).flat().map(line => [line]),
+    ];
+    const querySheet = XLSX.utils.aoa_to_sheet(queryData);
+    XLSX.utils.book_append_sheet(workbook, querySheet, 'Query');
+
+    // Download the file
+    XLSX.writeFile(workbook, `query-results-${Date.now()}.xlsx`);
   };
 
   const handleCopyToClipboard = () => {
@@ -870,6 +962,50 @@ function App() {
     }
   }, []); // Empty deps - only run on mount/unmount
 
+  // Handle menu commands from main process
+  useEffect(() => {
+    const handleMenuCommand = (_event: any, command: string) => {
+      switch (command) {
+        case 'new-tab':
+          handleNewTab();
+          break;
+        case 'save':
+          handleSave();
+          break;
+        case 'save-as':
+          handleSaveAs();
+          break;
+        case 'close-tab':
+          if (activeTab) {
+            handleCloseTab(activeTab.id);
+          }
+          break;
+        case 'format-sql':
+          formatRef.current();
+          break;
+        case 'execute':
+          executeRef.current();
+          break;
+        case 'execute-all':
+          executeAllRef.current();
+          break;
+        case 'toggle-schema-browser':
+          setShowSchemaBrowser(prev => !prev);
+          break;
+        case 'toggle-file-browser':
+          setShowFileBrowser(prev => !prev);
+          break;
+      }
+    };
+
+    if (window.electron.ipcRenderer) {
+      window.electron.ipcRenderer.on('menu-command', handleMenuCommand);
+      return () => {
+        window.electron.ipcRenderer?.removeListener('menu-command', handleMenuCommand);
+      };
+    }
+  }, [activeTab]); // Include activeTab for close-tab command
+
   // Handle file reload
   const handleReloadFile = async (filePath: string) => {
     try {
@@ -1087,6 +1223,17 @@ function App() {
               ],
               run: () => executeAllRef.current(),
             });
+
+            // Add Cmd/Ctrl+Shift+F keybinding to format SQL
+            editor.addAction({
+              id: 'format-sql',
+              label: 'Format SQL',
+              keybindings: [
+                monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF,
+              ],
+              contextMenuGroupId: 'modification',
+              run: () => formatRef.current(),
+            });
           }}
           options={{
             minimap: { enabled: false },
@@ -1111,6 +1258,20 @@ function App() {
 
       <div className="results-container" style={{ flex: `0 0 ${(1 - editorResultsRatio) * 100}%` }}>
         {error && <div className="error">{error}</div>}
+
+        {isExecuting && (
+          <div className="results-loading">
+            <div className="results-loading-spinner" />
+            <div className="results-loading-text">
+              {executionStatus || 'Executing query...'}
+            </div>
+            {elapsedTime > 0 && (
+              <div className="results-loading-elapsed">
+                {(elapsedTime / 1000).toFixed(1)}s
+              </div>
+            )}
+          </div>
+        )}
 
         {activeTab.results && (
           <>
@@ -1155,6 +1316,7 @@ function App() {
                     }));
                   }}
                   onExportCSV={handleExportCSV}
+                  onExportExcel={handleExportExcel}
                   onCopyToClipboard={handleCopyToClipboard}
                 />
               );
