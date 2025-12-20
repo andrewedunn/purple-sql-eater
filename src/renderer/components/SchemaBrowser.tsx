@@ -598,7 +598,7 @@ export function SchemaBrowser({
         onClick={onToggle}
         title="Show schema"
       >
-        {position === 'right' ? '◀' : '▶'}
+        {position === 'right' ? '◀ 🗂️' : '🗂️ ▶'}
       </button>
     );
   }

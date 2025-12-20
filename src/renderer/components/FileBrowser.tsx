@@ -95,6 +95,7 @@ export function FileBrowser({
       }
     } catch (err) {
       console.error('Failed to load workspace:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load saved workspace');
     }
   };
 

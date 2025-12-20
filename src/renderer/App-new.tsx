@@ -974,8 +974,10 @@ function App() {
   }, []); // Empty deps - only run on mount/unmount
 
   // Handle menu commands from main process
+  // Using empty deps to register listener once - toggle commands use functional updates
   useEffect(() => {
     const handleMenuCommand = (_event: any, command: string) => {
+      console.log('[Menu] Command received:', command);
       switch (command) {
         case 'new-tab':
           handleNewTab();
@@ -987,9 +989,15 @@ function App() {
           handleFileSaveAs(activeTabId);
           break;
         case 'close-tab':
-          if (activeTab) {
-            handleCloseTab(activeTab.id);
-          }
+          // This needs activeTab from closure, but we can get current tab from tabs state
+          setTabs(currentTabs => {
+            const current = currentTabs.find(t => t.id === activeTabId);
+            if (current) {
+              // Schedule the close for after this render
+              setTimeout(() => handleCloseTab(current.id), 0);
+            }
+            return currentTabs;
+          });
           break;
         case 'format-sql':
           formatRef.current();
@@ -1010,12 +1018,14 @@ function App() {
     };
 
     if (window.electron.ipcRenderer) {
+      // Remove any existing listeners first to prevent duplicates from HMR
+      window.electron.ipcRenderer.removeAllListeners?.('menu-command');
       window.electron.ipcRenderer.on('menu-command', handleMenuCommand);
       return () => {
-        window.electron.ipcRenderer?.removeListener('menu-command', handleMenuCommand);
+        window.electron.ipcRenderer?.removeAllListeners?.('menu-command');
       };
     }
-  }, [activeTab]); // Include activeTab for close-tab command
+  }, []); // Empty deps - register once, use functional updates for state
 
   // Handle file reload
   const handleReloadFile = async (filePath: string) => {
@@ -1466,10 +1476,9 @@ function App() {
           )
         )}
 
-        {/* Both browsers on left - stacked mode */}
-        {(showSchemaBrowser || showFileBrowser) &&
-         layoutConfig.schemaPosition === 'left' && layoutConfig.filePosition === 'left' &&
-         layoutConfig.layoutMode === 'stacked' && (
+        {/* Both browsers on left - stacked mode (only show sidebar when at least one is visible) */}
+        {layoutConfig.schemaPosition === 'left' && layoutConfig.filePosition === 'left' &&
+         layoutConfig.layoutMode === 'stacked' && (showSchemaBrowser || showFileBrowser) && (
           <div className="sidebar sidebar-stacked" style={{ width: `${stackedSidebarWidth}px` }}>
             {showSchemaBrowser && showFileBrowser ? (
               <>
@@ -1495,22 +1504,33 @@ function App() {
                   </div>
                 )}
                 {/* Collapsed browser indicators */}
-                <div className="collapsed-indicators">
-                  {!showSchemaBrowser && (
-                    <button className="collapsed-indicator" onClick={() => setShowSchemaBrowser(true)} title="Show schema">
-                      Schema ▼
-                    </button>
-                  )}
-                  {!showFileBrowser && (
-                    <button className="collapsed-indicator" onClick={() => setShowFileBrowser(true)} title="Show files">
-                      📁 Files ▼
-                    </button>
-                  )}
-                </div>
+                {(!showSchemaBrowser || !showFileBrowser) && (
+                  <div className="collapsed-indicators">
+                    {!showSchemaBrowser && (
+                      <button className="collapsed-indicator-compact" onClick={() => setShowSchemaBrowser(true)} title="Show schema">
+                        🗂️
+                      </button>
+                    )}
+                    {!showFileBrowser && (
+                      <button className="collapsed-indicator-compact" onClick={() => setShowFileBrowser(true)} title="Show files">
+                        📁
+                      </button>
+                    )}
+                  </div>
+                )}
               </>
             )}
             <div className="resize-handle-sidebar" onMouseDown={handleStackedSidebarResizeStart} title="Drag to resize"></div>
           </div>
+        )}
+
+        {/* Both browsers collapsed in stacked mode on left - show edge buttons */}
+        {layoutConfig.schemaPosition === 'left' && layoutConfig.filePosition === 'left' &&
+         layoutConfig.layoutMode === 'stacked' && !showSchemaBrowser && !showFileBrowser && (
+          <>
+            {renderSchemaBrowser()}
+            {renderFileBrowser()}
+          </>
         )}
 
         {/* Main panel in center */}
@@ -1542,10 +1562,18 @@ function App() {
           )
         )}
 
-        {/* Both browsers on right - stacked mode */}
-        {(showSchemaBrowser || showFileBrowser) &&
-         layoutConfig.schemaPosition === 'right' && layoutConfig.filePosition === 'right' &&
-         layoutConfig.layoutMode === 'stacked' && (
+        {/* Both browsers collapsed in stacked mode on right - show edge buttons */}
+        {layoutConfig.schemaPosition === 'right' && layoutConfig.filePosition === 'right' &&
+         layoutConfig.layoutMode === 'stacked' && !showSchemaBrowser && !showFileBrowser && (
+          <>
+            {renderSchemaBrowser()}
+            {renderFileBrowser()}
+          </>
+        )}
+
+        {/* Both browsers on right - stacked mode (only show sidebar when at least one is visible) */}
+        {layoutConfig.schemaPosition === 'right' && layoutConfig.filePosition === 'right' &&
+         layoutConfig.layoutMode === 'stacked' && (showSchemaBrowser || showFileBrowser) && (
           <div className="sidebar sidebar-stacked sidebar-right" style={{ width: `${stackedSidebarWidth}px` }}>
             <div className="resize-handle-sidebar resize-handle-left" onMouseDown={handleStackedSidebarResizeStart} title="Drag to resize"></div>
             {showSchemaBrowser && showFileBrowser ? (
@@ -1572,18 +1600,20 @@ function App() {
                   </div>
                 )}
                 {/* Collapsed browser indicators */}
-                <div className="collapsed-indicators">
-                  {!showSchemaBrowser && (
-                    <button className="collapsed-indicator" onClick={() => setShowSchemaBrowser(true)} title="Show schema">
-                      Schema ▼
-                    </button>
-                  )}
-                  {!showFileBrowser && (
-                    <button className="collapsed-indicator" onClick={() => setShowFileBrowser(true)} title="Show files">
-                      📁 Files ▼
-                    </button>
-                  )}
-                </div>
+                {(!showSchemaBrowser || !showFileBrowser) && (
+                  <div className="collapsed-indicators">
+                    {!showSchemaBrowser && (
+                      <button className="collapsed-indicator-compact" onClick={() => setShowSchemaBrowser(true)} title="Show schema">
+                        🗂️
+                      </button>
+                    )}
+                    {!showFileBrowser && (
+                      <button className="collapsed-indicator-compact" onClick={() => setShowFileBrowser(true)} title="Show files">
+                        📁
+                      </button>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>

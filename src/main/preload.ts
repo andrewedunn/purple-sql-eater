@@ -117,6 +117,9 @@ contextBridge.exposeInMainWorld('electron', {
     removeListener: (channel: string, func: (...args: any[]) => void) => {
       ipcRenderer.removeListener(channel, func);
     },
+    removeAllListeners: (channel: string) => {
+      ipcRenderer.removeAllListeners(channel);
+    },
   },
 });
 

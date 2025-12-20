@@ -48,8 +48,11 @@ function createWindow() {
 app.whenReady().then(() => {
   // Helper to send menu commands to renderer
   const sendMenuCommand = (command: string) => {
+    console.log('[Main] Sending menu command:', command);
     if (mainWindow) {
       mainWindow.webContents.send('menu-command', command);
+    } else {
+      console.log('[Main] No mainWindow available!');
     }
   };
 
