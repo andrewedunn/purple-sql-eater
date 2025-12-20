@@ -1441,35 +1441,74 @@ function App() {
 
       <div className="content">
         {/* Schema browser on left - horizontal mode or alone */}
-        {showSchemaBrowser && layoutConfig.schemaPosition === 'left' &&
+        {layoutConfig.schemaPosition === 'left' &&
          (layoutConfig.filePosition !== 'left' || layoutConfig.layoutMode === 'horizontal') && (
-          <div className="browser-panel" style={{ width: `${schemaBrowserWidth}px` }}>
-            {renderSchemaBrowser()}
-            <div className="resize-handle-browser" onMouseDown={handleSchemaBrowserResizeStart} title="Drag to resize"></div>
-          </div>
+          showSchemaBrowser ? (
+            <div className="browser-panel" style={{ width: `${schemaBrowserWidth}px` }}>
+              {renderSchemaBrowser()}
+              <div className="resize-handle-browser" onMouseDown={handleSchemaBrowserResizeStart} title="Drag to resize"></div>
+            </div>
+          ) : (
+            renderSchemaBrowser()
+          )
         )}
 
         {/* File browser on left - horizontal mode or alone */}
-        {showFileBrowser && layoutConfig.filePosition === 'left' &&
+        {layoutConfig.filePosition === 'left' &&
          (layoutConfig.schemaPosition !== 'left' || layoutConfig.layoutMode === 'horizontal') && (
-          <div className="browser-panel" style={{ width: `${fileBrowserWidth}px` }}>
-            {renderFileBrowser()}
-            <div className="resize-handle-browser" onMouseDown={handleFileBrowserResizeStart} title="Drag to resize"></div>
-          </div>
+          showFileBrowser ? (
+            <div className="browser-panel" style={{ width: `${fileBrowserWidth}px` }}>
+              {renderFileBrowser()}
+              <div className="resize-handle-browser" onMouseDown={handleFileBrowserResizeStart} title="Drag to resize"></div>
+            </div>
+          ) : (
+            renderFileBrowser()
+          )
         )}
 
         {/* Both browsers on left - stacked mode */}
-        {showSchemaBrowser && showFileBrowser &&
+        {(showSchemaBrowser || showFileBrowser) &&
          layoutConfig.schemaPosition === 'left' && layoutConfig.filePosition === 'left' &&
          layoutConfig.layoutMode === 'stacked' && (
           <div className="sidebar sidebar-stacked" style={{ width: `${stackedSidebarWidth}px` }}>
-            <div className="browser-container" style={{ flex: browserSplitRatio }}>
-              {renderSchemaBrowser()}
-            </div>
-            <div className="resize-handle-browsers vertical" onMouseDown={handleBrowsersResizeStart} title="Drag to resize"></div>
-            <div className="browser-container" style={{ flex: 1 - browserSplitRatio }}>
-              {renderFileBrowser()}
-            </div>
+            {showSchemaBrowser && showFileBrowser ? (
+              <>
+                <div className="browser-container" style={{ flex: browserSplitRatio }}>
+                  {renderSchemaBrowser()}
+                </div>
+                <div className="resize-handle-browsers vertical" onMouseDown={handleBrowsersResizeStart} title="Drag to resize"></div>
+                <div className="browser-container" style={{ flex: 1 - browserSplitRatio }}>
+                  {renderFileBrowser()}
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Render both browsers - visible one gets full space, collapsed one renders expand button */}
+                {showSchemaBrowser && (
+                  <div className="browser-container" style={{ flex: 1 }}>
+                    {renderSchemaBrowser()}
+                  </div>
+                )}
+                {showFileBrowser && (
+                  <div className="browser-container" style={{ flex: 1 }}>
+                    {renderFileBrowser()}
+                  </div>
+                )}
+                {/* Collapsed browser indicators */}
+                <div className="collapsed-indicators">
+                  {!showSchemaBrowser && (
+                    <button className="collapsed-indicator" onClick={() => setShowSchemaBrowser(true)} title="Show schema">
+                      Schema ▼
+                    </button>
+                  )}
+                  {!showFileBrowser && (
+                    <button className="collapsed-indicator" onClick={() => setShowFileBrowser(true)} title="Show files">
+                      📁 Files ▼
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
             <div className="resize-handle-sidebar" onMouseDown={handleStackedSidebarResizeStart} title="Drag to resize"></div>
           </div>
         )}
@@ -1478,36 +1517,75 @@ function App() {
         {renderMainPanel()}
 
         {/* Schema browser on right - horizontal mode or alone */}
-        {showSchemaBrowser && layoutConfig.schemaPosition === 'right' &&
+        {layoutConfig.schemaPosition === 'right' &&
          (layoutConfig.filePosition !== 'right' || layoutConfig.layoutMode === 'horizontal') && (
-          <div className="browser-panel browser-panel-right" style={{ width: `${schemaBrowserWidth}px` }}>
-            <div className="resize-handle-browser resize-handle-left" onMouseDown={handleSchemaBrowserResizeStart} title="Drag to resize"></div>
-            {renderSchemaBrowser()}
-          </div>
+          showSchemaBrowser ? (
+            <div className="browser-panel browser-panel-right" style={{ width: `${schemaBrowserWidth}px` }}>
+              <div className="resize-handle-browser resize-handle-left" onMouseDown={handleSchemaBrowserResizeStart} title="Drag to resize"></div>
+              {renderSchemaBrowser()}
+            </div>
+          ) : (
+            renderSchemaBrowser()
+          )
         )}
 
         {/* File browser on right - horizontal mode or alone */}
-        {showFileBrowser && layoutConfig.filePosition === 'right' &&
+        {layoutConfig.filePosition === 'right' &&
          (layoutConfig.schemaPosition !== 'right' || layoutConfig.layoutMode === 'horizontal') && (
-          <div className="browser-panel browser-panel-right" style={{ width: `${fileBrowserWidth}px` }}>
-            <div className="resize-handle-browser resize-handle-left" onMouseDown={handleFileBrowserResizeStart} title="Drag to resize"></div>
-            {renderFileBrowser()}
-          </div>
+          showFileBrowser ? (
+            <div className="browser-panel browser-panel-right" style={{ width: `${fileBrowserWidth}px` }}>
+              <div className="resize-handle-browser resize-handle-left" onMouseDown={handleFileBrowserResizeStart} title="Drag to resize"></div>
+              {renderFileBrowser()}
+            </div>
+          ) : (
+            renderFileBrowser()
+          )
         )}
 
         {/* Both browsers on right - stacked mode */}
-        {showSchemaBrowser && showFileBrowser &&
+        {(showSchemaBrowser || showFileBrowser) &&
          layoutConfig.schemaPosition === 'right' && layoutConfig.filePosition === 'right' &&
          layoutConfig.layoutMode === 'stacked' && (
           <div className="sidebar sidebar-stacked sidebar-right" style={{ width: `${stackedSidebarWidth}px` }}>
             <div className="resize-handle-sidebar resize-handle-left" onMouseDown={handleStackedSidebarResizeStart} title="Drag to resize"></div>
-            <div className="browser-container" style={{ flex: browserSplitRatio }}>
-              {renderSchemaBrowser()}
-            </div>
-            <div className="resize-handle-browsers vertical" onMouseDown={handleBrowsersResizeStart} title="Drag to resize"></div>
-            <div className="browser-container" style={{ flex: 1 - browserSplitRatio }}>
-              {renderFileBrowser()}
-            </div>
+            {showSchemaBrowser && showFileBrowser ? (
+              <>
+                <div className="browser-container" style={{ flex: browserSplitRatio }}>
+                  {renderSchemaBrowser()}
+                </div>
+                <div className="resize-handle-browsers vertical" onMouseDown={handleBrowsersResizeStart} title="Drag to resize"></div>
+                <div className="browser-container" style={{ flex: 1 - browserSplitRatio }}>
+                  {renderFileBrowser()}
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Render both browsers - visible one gets full space, collapsed one renders expand button */}
+                {showSchemaBrowser && (
+                  <div className="browser-container" style={{ flex: 1 }}>
+                    {renderSchemaBrowser()}
+                  </div>
+                )}
+                {showFileBrowser && (
+                  <div className="browser-container" style={{ flex: 1 }}>
+                    {renderFileBrowser()}
+                  </div>
+                )}
+                {/* Collapsed browser indicators */}
+                <div className="collapsed-indicators">
+                  {!showSchemaBrowser && (
+                    <button className="collapsed-indicator" onClick={() => setShowSchemaBrowser(true)} title="Show schema">
+                      Schema ▼
+                    </button>
+                  )}
+                  {!showFileBrowser && (
+                    <button className="collapsed-indicator" onClick={() => setShowFileBrowser(true)} title="Show files">
+                      📁 Files ▼
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

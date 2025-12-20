@@ -593,8 +593,12 @@ export function SchemaBrowser({
 
   if (!isVisible) {
     return (
-      <button className="schema-toggle collapsed" onClick={onToggle} title="Show schema">
-        ▶
+      <button
+        className={`schema-toggle collapsed ${position === 'right' ? 'right' : ''}`}
+        onClick={onToggle}
+        title="Show schema"
+      >
+        {position === 'right' ? '◀' : '▶'}
       </button>
     );
   }
@@ -629,7 +633,7 @@ export function SchemaBrowser({
               />
             )}
             <button className="schema-toggle-btn" onClick={onToggle} title="Hide schema">
-              ◀
+              {position === 'right' ? '▶' : '◀'}
             </button>
           </div>
         </div>

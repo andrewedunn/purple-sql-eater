@@ -55,8 +55,9 @@ export function FileBrowser({
   }, []);
 
   // Reload file tree when workspace changes and set up folder watching
+  // Only register listeners when visible to avoid memory leaks from multiple instances
   useEffect(() => {
-    if (workspace) {
+    if (workspace && isVisible) {
       loadFileTree();
 
       // Watch for changes in the workspace folder (if function exists)
@@ -84,7 +85,7 @@ export function FileBrowser({
         }
       };
     }
-  }, [workspace]);
+  }, [workspace, isVisible]);
 
   const loadWorkspace = async () => {
     try {
@@ -503,8 +504,12 @@ export function FileBrowser({
 
   if (!isVisible) {
     return (
-      <button className="file-toggle collapsed" onClick={onToggle} title="Show files">
-        📁
+      <button
+        className={`file-toggle collapsed ${position === 'right' ? 'right' : ''}`}
+        onClick={onToggle}
+        title="Show files"
+      >
+        {position === 'right' ? '◀ 📁' : '📁 ▶'}
       </button>
     );
   }
@@ -535,7 +540,7 @@ export function FileBrowser({
             onClick={onToggle}
             title="Hide files"
           >
-            ◀
+            {position === 'right' ? '▶' : '◀'}
           </button>
         </div>
       </div>
