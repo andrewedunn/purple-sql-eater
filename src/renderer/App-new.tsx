@@ -405,14 +405,22 @@ function App() {
       if (!model) return;
 
       const sql = model.getValue();
-      const formatted = formatSQL(sql);
-      if (formatted !== sql) {
-        // Preserve cursor position roughly
-        const position = editor.getPosition();
-        model.setValue(formatted);
-        if (position) {
-          editor.setPosition(position);
+      try {
+        const formatted = formatSQL(sql);
+        if (formatted !== sql) {
+          const position = editor.getPosition();
+          model.setValue(formatted);
+          if (position) {
+            // Clamp cursor position to valid range after formatting
+            const lineCount = model.getLineCount();
+            const clampedLine = Math.min(position.lineNumber, lineCount);
+            const maxColumn = model.getLineMaxColumn(clampedLine);
+            const clampedColumn = Math.min(position.column, maxColumn);
+            editor.setPosition({ lineNumber: clampedLine, column: clampedColumn });
+          }
         }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to format SQL');
       }
     };
   });
@@ -530,55 +538,58 @@ function App() {
   const handleExportExcel = () => {
     if (!activeTab.results) return;
 
-    const workbook = XLSX.utils.book_new();
-    const execution = activeTab.results;
+    try {
+      const workbook = XLSX.utils.book_new();
+      const execution = activeTab.results;
 
-    // Add a sheet for each result
-    execution.results.forEach((result, index) => {
-      if ('error' in result) {
-        // Create error sheet
-        const errorData = [
-          ['Error'],
-          [result.error],
-          [''],
-          ['Query'],
-          [result.query],
-        ];
-        const errorSheet = XLSX.utils.aoa_to_sheet(errorData);
-        XLSX.utils.book_append_sheet(workbook, errorSheet, `Error ${index + 1}`);
-      } else {
-        // Create data sheet with headers and rows
-        const sheetData = [
-          result.columns,
-          ...result.rows.map((row: unknown[]) =>
-            row.map((cell: unknown) => {
-              if (cell === null || cell === undefined) return '';
-              if (typeof cell === 'object') return JSON.stringify(cell);
-              return cell;
-            })
-          ),
-        ];
-        const sheet = XLSX.utils.aoa_to_sheet(sheetData);
-        const sheetName = execution.results.length === 1 ? 'Results' : `Results ${index + 1}`;
-        XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
-      }
-    });
+      // Add a sheet for each result
+      execution.results.forEach((result, index) => {
+        if ('error' in result) {
+          // Create error sheet
+          const errorData = [
+            ['Error'],
+            [result.error],
+            [''],
+            ['Query'],
+            [result.query],
+          ];
+          const errorSheet = XLSX.utils.aoa_to_sheet(errorData);
+          XLSX.utils.book_append_sheet(workbook, errorSheet, `Error ${index + 1}`);
+        } else {
+          // Create data sheet with headers and rows
+          const sheetData = [
+            result.columns,
+            ...result.rows.map((row: unknown[]) =>
+              row.map((cell: unknown) => {
+                if (cell === null || cell === undefined) return '';
+                if (typeof cell === 'object') return JSON.stringify(cell);
+                return cell;
+              })
+            ),
+          ];
+          const sheet = XLSX.utils.aoa_to_sheet(sheetData);
+          const sheetName = execution.results.length === 1 ? 'Results' : `Results ${index + 1}`;
+          XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+        }
+      });
 
-    // Add query sheet
-    const queryData = [
-      ['Queries'],
-      [''],
-      ...execution.queries.map((q, i) => [
-        execution.queries.length > 1 ? `-- Query ${i + 1}` : '',
-        q.sql,
-        '',
-      ]).flat().map(line => [line]),
-    ];
-    const querySheet = XLSX.utils.aoa_to_sheet(queryData);
-    XLSX.utils.book_append_sheet(workbook, querySheet, 'Query');
+      // Add query sheet with all executed SQL
+      const queryRows: [string][] = [['Queries'], ['']];
+      execution.queries.forEach((q, i) => {
+        if (execution.queries.length > 1) {
+          queryRows.push([`-- Query ${i + 1}`]);
+        }
+        queryRows.push([q.sql]);
+        queryRows.push(['']);
+      });
+      const querySheet = XLSX.utils.aoa_to_sheet(queryRows);
+      XLSX.utils.book_append_sheet(workbook, querySheet, 'Query');
 
-    // Download the file
-    XLSX.writeFile(workbook, `query-results-${Date.now()}.xlsx`);
+      // Download the file
+      XLSX.writeFile(workbook, `query-results-${Date.now()}.xlsx`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to export Excel file');
+    }
   };
 
   const handleCopyToClipboard = () => {
@@ -970,10 +981,10 @@ function App() {
           handleNewTab();
           break;
         case 'save':
-          handleSave();
+          handleFileSave(activeTabId);
           break;
         case 'save-as':
-          handleSaveAs();
+          handleFileSaveAs(activeTabId);
           break;
         case 'close-tab':
           if (activeTab) {

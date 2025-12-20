@@ -19,21 +19,16 @@ const DEFAULT_OPTIONS: FormatOptions = {
 
 /**
  * Format SQL using BigQuery dialect.
- * Returns the formatted SQL or the original if formatting fails.
+ * Throws an error if formatting fails.
  */
 export function formatSQL(sql: string, options: FormatOptions = {}): string {
   const opts = { ...DEFAULT_OPTIONS, ...options };
 
-  try {
-    return format(sql, {
-      language: 'bigquery',
-      tabWidth: opts.tabWidth,
-      useTabs: opts.useTabs,
-      keywordCase: opts.keywordCase,
-      linesBetweenQueries: opts.linesBetweenQueries,
-    });
-  } catch (error) {
-    console.error('SQL formatting failed:', error);
-    return sql;
-  }
+  return format(sql, {
+    language: 'bigquery',
+    tabWidth: opts.tabWidth,
+    useTabs: opts.useTabs,
+    keywordCase: opts.keywordCase,
+    linesBetweenQueries: opts.linesBetweenQueries,
+  });
 }

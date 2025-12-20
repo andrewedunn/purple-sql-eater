@@ -122,7 +122,7 @@ export function ResultsTable({ results, filters, onFiltersChange, onExportCSV, o
   const EXPORT_FORMAT_KEY = 'purple-sql-eater-export-format';
   const [exportFormat, setExportFormat] = useState<'csv' | 'excel'>(() => {
     const stored = localStorage.getItem(EXPORT_FORMAT_KEY);
-    return (stored as 'csv' | 'excel') || 'csv';
+    return stored === 'csv' || stored === 'excel' ? stored : 'csv';
   });
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
