@@ -102,10 +102,23 @@ contextBridge.exposeInMainWorld('electron', {
 
   ipcRenderer: {
     on: (channel: string, func: (...args: any[]) => void) => {
-      ipcRenderer.on(channel, func);
+      const allowedChannels = [
+        'file-changed',
+        'file-deleted',
+        'file-renamed',
+        'folder-changed',
+        'schema-progress',
+        'menu-command',
+      ];
+      if (allowedChannels.includes(channel)) {
+        ipcRenderer.on(channel, func);
+      }
     },
     removeListener: (channel: string, func: (...args: any[]) => void) => {
       ipcRenderer.removeListener(channel, func);
+    },
+    removeAllListeners: (channel: string) => {
+      ipcRenderer.removeAllListeners(channel);
     },
   },
 });

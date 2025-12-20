@@ -15,6 +15,8 @@ import { ResultsTable } from './components/ResultsTable';
 import { ResultsTabs } from './components/ResultsTabs';
 import { extractTableNames } from './utils/sqlParser';
 import { splitQueries, getQueryAtPosition, ParsedQuery } from './utils/sqlSplitter';
+import { formatSQL } from './utils/sqlFormatter';
+import * as XLSX from 'xlsx';
 import {
   getKeywordCompletions,
   getFunctionCompletions,
@@ -73,6 +75,8 @@ function App() {
   const [executionStatus, setExecutionStatus] = useState<string | null>(null);
   const [activeTabId, setActiveTabId] = useState('1');
   const [isExecuting, setIsExecuting] = useState(false);
+  const [executionStartTime, setExecutionStartTime] = useState<number | null>(null);
+  const [elapsedTime, setElapsedTime] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [currentConnection, setCurrentConnection] = useState<ConnectionListItem | null>(null);
@@ -120,6 +124,7 @@ function App() {
   const recentTablesRef = useRef<string[]>([]);
   const executeRef = useRef<() => void>(() => {});
   const executeAllRef = useRef<() => void>(() => {});
+  const formatRef = useRef<() => void>(() => {});
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
@@ -253,6 +258,7 @@ function App() {
 
     setError(null);
     setIsExecuting(true);
+    setExecutionStartTime(Date.now());
     setQuerySuccess(false);
     setExecutionStatus(null);
 
@@ -362,8 +368,23 @@ function App() {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setIsExecuting(false);
+      setExecutionStartTime(null);
     }
   };
+
+  // Track elapsed time during query execution
+  useEffect(() => {
+    if (!isExecuting || !executionStartTime) {
+      setElapsedTime(0);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setElapsedTime(Date.now() - executionStartTime);
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [isExecuting, executionStartTime]);
 
   // Keep refs updated for Monaco editor actions (avoids stale closure issue)
   useEffect(() => {
@@ -375,6 +396,31 @@ function App() {
     executeAllRef.current = () => {
       if (isConnected && !isExecuting) {
         handleExecute('all');
+      }
+    };
+    formatRef.current = () => {
+      if (!editorRef.current) return;
+      const editor = editorRef.current;
+      const model = editor.getModel();
+      if (!model) return;
+
+      const sql = model.getValue();
+      try {
+        const formatted = formatSQL(sql);
+        if (formatted !== sql) {
+          const position = editor.getPosition();
+          model.setValue(formatted);
+          if (position) {
+            // Clamp cursor position to valid range after formatting
+            const lineCount = model.getLineCount();
+            const clampedLine = Math.min(position.lineNumber, lineCount);
+            const maxColumn = model.getLineMaxColumn(clampedLine);
+            const clampedColumn = Math.min(position.column, maxColumn);
+            editor.setPosition({ lineNumber: clampedLine, column: clampedColumn });
+          }
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to format SQL');
       }
     };
   });
@@ -487,6 +533,63 @@ function App() {
     a.download = `query-results-${Date.now()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportExcel = () => {
+    if (!activeTab.results) return;
+
+    try {
+      const workbook = XLSX.utils.book_new();
+      const execution = activeTab.results;
+
+      // Add a sheet for each result
+      execution.results.forEach((result, index) => {
+        if ('error' in result) {
+          // Create error sheet
+          const errorData = [
+            ['Error'],
+            [result.error],
+            [''],
+            ['Query'],
+            [result.query],
+          ];
+          const errorSheet = XLSX.utils.aoa_to_sheet(errorData);
+          XLSX.utils.book_append_sheet(workbook, errorSheet, `Error ${index + 1}`);
+        } else {
+          // Create data sheet with headers and rows
+          const sheetData = [
+            result.columns,
+            ...result.rows.map((row: unknown[]) =>
+              row.map((cell: unknown) => {
+                if (cell === null || cell === undefined) return '';
+                if (typeof cell === 'object') return JSON.stringify(cell);
+                return cell;
+              })
+            ),
+          ];
+          const sheet = XLSX.utils.aoa_to_sheet(sheetData);
+          const sheetName = execution.results.length === 1 ? 'Results' : `Results ${index + 1}`;
+          XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+        }
+      });
+
+      // Add query sheet with all executed SQL
+      const queryRows: [string][] = [['Queries'], ['']];
+      execution.queries.forEach((q, i) => {
+        if (execution.queries.length > 1) {
+          queryRows.push([`-- Query ${i + 1}`]);
+        }
+        queryRows.push([q.sql]);
+        queryRows.push(['']);
+      });
+      const querySheet = XLSX.utils.aoa_to_sheet(queryRows);
+      XLSX.utils.book_append_sheet(workbook, querySheet, 'Query');
+
+      // Download the file
+      XLSX.writeFile(workbook, `query-results-${Date.now()}.xlsx`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to export Excel file');
+    }
   };
 
   const handleCopyToClipboard = () => {
@@ -870,6 +973,60 @@ function App() {
     }
   }, []); // Empty deps - only run on mount/unmount
 
+  // Handle menu commands from main process
+  // Using empty deps to register listener once - toggle commands use functional updates
+  useEffect(() => {
+    const handleMenuCommand = (_event: any, command: string) => {
+      console.log('[Menu] Command received:', command);
+      switch (command) {
+        case 'new-tab':
+          handleNewTab();
+          break;
+        case 'save':
+          handleFileSave(activeTabId);
+          break;
+        case 'save-as':
+          handleFileSaveAs(activeTabId);
+          break;
+        case 'close-tab':
+          // This needs activeTab from closure, but we can get current tab from tabs state
+          setTabs(currentTabs => {
+            const current = currentTabs.find(t => t.id === activeTabId);
+            if (current) {
+              // Schedule the close for after this render
+              setTimeout(() => handleCloseTab(current.id), 0);
+            }
+            return currentTabs;
+          });
+          break;
+        case 'format-sql':
+          formatRef.current();
+          break;
+        case 'execute':
+          executeRef.current();
+          break;
+        case 'execute-all':
+          executeAllRef.current();
+          break;
+        case 'toggle-schema-browser':
+          setShowSchemaBrowser(prev => !prev);
+          break;
+        case 'toggle-file-browser':
+          setShowFileBrowser(prev => !prev);
+          break;
+      }
+    };
+
+    if (window.electron.ipcRenderer) {
+      // Remove any existing listeners first to prevent duplicates from HMR
+      window.electron.ipcRenderer.removeAllListeners?.('menu-command');
+      window.electron.ipcRenderer.on('menu-command', handleMenuCommand);
+      return () => {
+        window.electron.ipcRenderer?.removeAllListeners?.('menu-command');
+      };
+    }
+  }, []); // Empty deps - register once, use functional updates for state
+
   // Handle file reload
   const handleReloadFile = async (filePath: string) => {
     try {
@@ -1087,6 +1244,17 @@ function App() {
               ],
               run: () => executeAllRef.current(),
             });
+
+            // Add Cmd/Ctrl+Shift+F keybinding to format SQL
+            editor.addAction({
+              id: 'format-sql',
+              label: 'Format SQL',
+              keybindings: [
+                monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF,
+              ],
+              contextMenuGroupId: 'modification',
+              run: () => formatRef.current(),
+            });
           }}
           options={{
             minimap: { enabled: false },
@@ -1111,6 +1279,20 @@ function App() {
 
       <div className="results-container" style={{ flex: `0 0 ${(1 - editorResultsRatio) * 100}%` }}>
         {error && <div className="error">{error}</div>}
+
+        {isExecuting && (
+          <div className="results-loading">
+            <div className="results-loading-spinner" />
+            <div className="results-loading-text">
+              {executionStatus || 'Executing query...'}
+            </div>
+            {elapsedTime > 0 && (
+              <div className="results-loading-elapsed">
+                {(elapsedTime / 1000).toFixed(1)}s
+              </div>
+            )}
+          </div>
+        )}
 
         {activeTab.results && (
           <>
@@ -1155,6 +1337,7 @@ function App() {
                     }));
                   }}
                   onExportCSV={handleExportCSV}
+                  onExportExcel={handleExportExcel}
                   onCopyToClipboard={handleCopyToClipboard}
                 />
               );
@@ -1268,73 +1451,171 @@ function App() {
 
       <div className="content">
         {/* Schema browser on left - horizontal mode or alone */}
-        {showSchemaBrowser && layoutConfig.schemaPosition === 'left' &&
+        {layoutConfig.schemaPosition === 'left' &&
          (layoutConfig.filePosition !== 'left' || layoutConfig.layoutMode === 'horizontal') && (
-          <div className="browser-panel" style={{ width: `${schemaBrowserWidth}px` }}>
-            {renderSchemaBrowser()}
-            <div className="resize-handle-browser" onMouseDown={handleSchemaBrowserResizeStart} title="Drag to resize"></div>
-          </div>
+          showSchemaBrowser ? (
+            <div className="browser-panel" style={{ width: `${schemaBrowserWidth}px` }}>
+              {renderSchemaBrowser()}
+              <div className="resize-handle-browser" onMouseDown={handleSchemaBrowserResizeStart} title="Drag to resize"></div>
+            </div>
+          ) : (
+            renderSchemaBrowser()
+          )
         )}
 
         {/* File browser on left - horizontal mode or alone */}
-        {showFileBrowser && layoutConfig.filePosition === 'left' &&
+        {layoutConfig.filePosition === 'left' &&
          (layoutConfig.schemaPosition !== 'left' || layoutConfig.layoutMode === 'horizontal') && (
-          <div className="browser-panel" style={{ width: `${fileBrowserWidth}px` }}>
-            {renderFileBrowser()}
-            <div className="resize-handle-browser" onMouseDown={handleFileBrowserResizeStart} title="Drag to resize"></div>
+          showFileBrowser ? (
+            <div className="browser-panel" style={{ width: `${fileBrowserWidth}px` }}>
+              {renderFileBrowser()}
+              <div className="resize-handle-browser" onMouseDown={handleFileBrowserResizeStart} title="Drag to resize"></div>
+            </div>
+          ) : (
+            renderFileBrowser()
+          )
+        )}
+
+        {/* Both browsers on left - stacked mode (only show sidebar when at least one is visible) */}
+        {layoutConfig.schemaPosition === 'left' && layoutConfig.filePosition === 'left' &&
+         layoutConfig.layoutMode === 'stacked' && (showSchemaBrowser || showFileBrowser) && (
+          <div className="sidebar sidebar-stacked" style={{ width: `${stackedSidebarWidth}px` }}>
+            {showSchemaBrowser && showFileBrowser ? (
+              <>
+                <div className="browser-container" style={{ flex: browserSplitRatio }}>
+                  {renderSchemaBrowser()}
+                </div>
+                <div className="resize-handle-browsers vertical" onMouseDown={handleBrowsersResizeStart} title="Drag to resize"></div>
+                <div className="browser-container" style={{ flex: 1 - browserSplitRatio }}>
+                  {renderFileBrowser()}
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Render both browsers - visible one gets full space, collapsed one renders expand button */}
+                {showSchemaBrowser && (
+                  <div className="browser-container" style={{ flex: 1 }}>
+                    {renderSchemaBrowser()}
+                  </div>
+                )}
+                {showFileBrowser && (
+                  <div className="browser-container" style={{ flex: 1 }}>
+                    {renderFileBrowser()}
+                  </div>
+                )}
+                {/* Collapsed browser indicators */}
+                {(!showSchemaBrowser || !showFileBrowser) && (
+                  <div className="collapsed-indicators">
+                    {!showSchemaBrowser && (
+                      <button className="collapsed-indicator-compact" onClick={() => setShowSchemaBrowser(true)} title="Show schema">
+                        🗂️
+                      </button>
+                    )}
+                    {!showFileBrowser && (
+                      <button className="collapsed-indicator-compact" onClick={() => setShowFileBrowser(true)} title="Show files">
+                        📁
+                      </button>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+            <div className="resize-handle-sidebar" onMouseDown={handleStackedSidebarResizeStart} title="Drag to resize"></div>
           </div>
         )}
 
-        {/* Both browsers on left - stacked mode */}
-        {showSchemaBrowser && showFileBrowser &&
-         layoutConfig.schemaPosition === 'left' && layoutConfig.filePosition === 'left' &&
-         layoutConfig.layoutMode === 'stacked' && (
-          <div className="sidebar sidebar-stacked" style={{ width: `${stackedSidebarWidth}px` }}>
-            <div className="browser-container" style={{ flex: browserSplitRatio }}>
-              {renderSchemaBrowser()}
-            </div>
-            <div className="resize-handle-browsers vertical" onMouseDown={handleBrowsersResizeStart} title="Drag to resize"></div>
-            <div className="browser-container" style={{ flex: 1 - browserSplitRatio }}>
-              {renderFileBrowser()}
-            </div>
-            <div className="resize-handle-sidebar" onMouseDown={handleStackedSidebarResizeStart} title="Drag to resize"></div>
-          </div>
+        {/* Both browsers collapsed in stacked mode on left - show edge buttons */}
+        {layoutConfig.schemaPosition === 'left' && layoutConfig.filePosition === 'left' &&
+         layoutConfig.layoutMode === 'stacked' && !showSchemaBrowser && !showFileBrowser && (
+          <>
+            {renderSchemaBrowser()}
+            {renderFileBrowser()}
+          </>
         )}
 
         {/* Main panel in center */}
         {renderMainPanel()}
 
         {/* Schema browser on right - horizontal mode or alone */}
-        {showSchemaBrowser && layoutConfig.schemaPosition === 'right' &&
+        {layoutConfig.schemaPosition === 'right' &&
          (layoutConfig.filePosition !== 'right' || layoutConfig.layoutMode === 'horizontal') && (
-          <div className="browser-panel browser-panel-right" style={{ width: `${schemaBrowserWidth}px` }}>
-            <div className="resize-handle-browser resize-handle-left" onMouseDown={handleSchemaBrowserResizeStart} title="Drag to resize"></div>
-            {renderSchemaBrowser()}
-          </div>
+          showSchemaBrowser ? (
+            <div className="browser-panel browser-panel-right" style={{ width: `${schemaBrowserWidth}px` }}>
+              <div className="resize-handle-browser resize-handle-left" onMouseDown={handleSchemaBrowserResizeStart} title="Drag to resize"></div>
+              {renderSchemaBrowser()}
+            </div>
+          ) : (
+            renderSchemaBrowser()
+          )
         )}
 
         {/* File browser on right - horizontal mode or alone */}
-        {showFileBrowser && layoutConfig.filePosition === 'right' &&
+        {layoutConfig.filePosition === 'right' &&
          (layoutConfig.schemaPosition !== 'right' || layoutConfig.layoutMode === 'horizontal') && (
-          <div className="browser-panel browser-panel-right" style={{ width: `${fileBrowserWidth}px` }}>
-            <div className="resize-handle-browser resize-handle-left" onMouseDown={handleFileBrowserResizeStart} title="Drag to resize"></div>
-            {renderFileBrowser()}
-          </div>
-        )}
-
-        {/* Both browsers on right - stacked mode */}
-        {showSchemaBrowser && showFileBrowser &&
-         layoutConfig.schemaPosition === 'right' && layoutConfig.filePosition === 'right' &&
-         layoutConfig.layoutMode === 'stacked' && (
-          <div className="sidebar sidebar-stacked sidebar-right" style={{ width: `${stackedSidebarWidth}px` }}>
-            <div className="resize-handle-sidebar resize-handle-left" onMouseDown={handleStackedSidebarResizeStart} title="Drag to resize"></div>
-            <div className="browser-container" style={{ flex: browserSplitRatio }}>
-              {renderSchemaBrowser()}
-            </div>
-            <div className="resize-handle-browsers vertical" onMouseDown={handleBrowsersResizeStart} title="Drag to resize"></div>
-            <div className="browser-container" style={{ flex: 1 - browserSplitRatio }}>
+          showFileBrowser ? (
+            <div className="browser-panel browser-panel-right" style={{ width: `${fileBrowserWidth}px` }}>
+              <div className="resize-handle-browser resize-handle-left" onMouseDown={handleFileBrowserResizeStart} title="Drag to resize"></div>
               {renderFileBrowser()}
             </div>
+          ) : (
+            renderFileBrowser()
+          )
+        )}
+
+        {/* Both browsers collapsed in stacked mode on right - show edge buttons */}
+        {layoutConfig.schemaPosition === 'right' && layoutConfig.filePosition === 'right' &&
+         layoutConfig.layoutMode === 'stacked' && !showSchemaBrowser && !showFileBrowser && (
+          <>
+            {renderSchemaBrowser()}
+            {renderFileBrowser()}
+          </>
+        )}
+
+        {/* Both browsers on right - stacked mode (only show sidebar when at least one is visible) */}
+        {layoutConfig.schemaPosition === 'right' && layoutConfig.filePosition === 'right' &&
+         layoutConfig.layoutMode === 'stacked' && (showSchemaBrowser || showFileBrowser) && (
+          <div className="sidebar sidebar-stacked sidebar-right" style={{ width: `${stackedSidebarWidth}px` }}>
+            <div className="resize-handle-sidebar resize-handle-left" onMouseDown={handleStackedSidebarResizeStart} title="Drag to resize"></div>
+            {showSchemaBrowser && showFileBrowser ? (
+              <>
+                <div className="browser-container" style={{ flex: browserSplitRatio }}>
+                  {renderSchemaBrowser()}
+                </div>
+                <div className="resize-handle-browsers vertical" onMouseDown={handleBrowsersResizeStart} title="Drag to resize"></div>
+                <div className="browser-container" style={{ flex: 1 - browserSplitRatio }}>
+                  {renderFileBrowser()}
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Render both browsers - visible one gets full space, collapsed one renders expand button */}
+                {showSchemaBrowser && (
+                  <div className="browser-container" style={{ flex: 1 }}>
+                    {renderSchemaBrowser()}
+                  </div>
+                )}
+                {showFileBrowser && (
+                  <div className="browser-container" style={{ flex: 1 }}>
+                    {renderFileBrowser()}
+                  </div>
+                )}
+                {/* Collapsed browser indicators */}
+                {(!showSchemaBrowser || !showFileBrowser) && (
+                  <div className="collapsed-indicators">
+                    {!showSchemaBrowser && (
+                      <button className="collapsed-indicator-compact" onClick={() => setShowSchemaBrowser(true)} title="Show schema">
+                        🗂️
+                      </button>
+                    )}
+                    {!showFileBrowser && (
+                      <button className="collapsed-indicator-compact" onClick={() => setShowFileBrowser(true)} title="Show files">
+                        📁
+                      </button>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
       </div>

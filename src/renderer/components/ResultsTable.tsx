@@ -12,6 +12,7 @@ interface ResultsTableProps {
   filters: ColumnFilter[];
   onFiltersChange: (filters: ColumnFilter[]) => void;
   onExportCSV?: () => void;
+  onExportExcel?: () => void;
   onCopyToClipboard?: () => void;
 }
 
@@ -97,7 +98,7 @@ function applyFilters(rows: unknown[][], filters: ColumnFilter[]): unknown[][] {
   );
 }
 
-export function ResultsTable({ results, filters, onFiltersChange, onExportCSV, onCopyToClipboard }: ResultsTableProps) {
+export function ResultsTable({ results, filters, onFiltersChange, onExportCSV, onExportExcel, onCopyToClipboard }: ResultsTableProps) {
   const [sortState, setSortState] = useState<SortState>({ columnIndex: null, direction: null });
   const [columnWidths, setColumnWidths] = useState<Record<number, number>>({});
   const [resizingColumn, setResizingColumn] = useState<number | null>(null);
@@ -116,6 +117,27 @@ export function ResultsTable({ results, filters, onFiltersChange, onExportCSV, o
     row: 0,
     col: 0,
   });
+
+  // Export format preference (persisted to localStorage)
+  const EXPORT_FORMAT_KEY = 'purple-sql-eater-export-format';
+  const [exportFormat, setExportFormat] = useState<'csv' | 'excel'>(() => {
+    const stored = localStorage.getItem(EXPORT_FORMAT_KEY);
+    return stored === 'csv' || stored === 'excel' ? stored : 'csv';
+  });
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close export menu when clicking outside
+  useEffect(() => {
+    if (!showExportMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [showExportMenu]);
 
   // Use filters from props
   const columnFilters = filters;
@@ -685,10 +707,59 @@ export function ResultsTable({ results, filters, onFiltersChange, onExportCSV, o
                 Copy
               </button>
             )}
-            {onExportCSV && (
-              <button className="btn-action" onClick={onExportCSV} title="Export as CSV">
-                Export CSV
-              </button>
+            {(onExportCSV || onExportExcel) && (
+              <div className="export-group" ref={exportMenuRef}>
+                <button
+                  className="btn-action btn-export"
+                  onClick={() => {
+                    if (exportFormat === 'csv' && onExportCSV) {
+                      onExportCSV();
+                    } else if (exportFormat === 'excel' && onExportExcel) {
+                      onExportExcel();
+                    }
+                  }}
+                  title={exportFormat === 'csv' ? 'Export as CSV' : 'Export as Excel'}
+                >
+                  {exportFormat === 'csv' ? 'Export CSV' : 'Export Excel'}
+                </button>
+                <button
+                  className="btn-action btn-export-dropdown"
+                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  title="Export options"
+                >
+                  ▾
+                </button>
+                {showExportMenu && (
+                  <div className="export-menu">
+                    {onExportCSV && (
+                      <button
+                        className={`export-menu-item ${exportFormat === 'csv' ? 'active' : ''}`}
+                        onClick={() => {
+                          setExportFormat('csv');
+                          localStorage.setItem(EXPORT_FORMAT_KEY, 'csv');
+                          setShowExportMenu(false);
+                          onExportCSV();
+                        }}
+                      >
+                        Export CSV
+                      </button>
+                    )}
+                    {onExportExcel && (
+                      <button
+                        className={`export-menu-item ${exportFormat === 'excel' ? 'active' : ''}`}
+                        onClick={() => {
+                          setExportFormat('excel');
+                          localStorage.setItem(EXPORT_FORMAT_KEY, 'excel');
+                          setShowExportMenu(false);
+                          onExportExcel();
+                        }}
+                      >
+                        Export Excel
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

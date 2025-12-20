@@ -46,20 +46,65 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  // Set up application menu (required for Cmd+Q to work on macOS)
+  // Helper to send menu commands to renderer
+  const sendMenuCommand = (command: string) => {
+    console.log('[Main] Sending menu command:', command);
+    if (mainWindow) {
+      mainWindow.webContents.send('menu-command', command);
+    } else {
+      console.log('[Main] No mainWindow available!');
+    }
+  };
+
+  // Set up application menu
+  const isMac = process.platform === 'darwin';
   const template: Electron.MenuItemConstructorOptions[] = [
-    {
+    // App menu (macOS only)
+    ...(isMac ? [{
       label: app.name,
       submenu: [
-        { role: 'about' },
+        { role: 'about' as const },
+        { type: 'separator' as const },
+        { role: 'hide' as const },
+        { role: 'hideOthers' as const },
+        { role: 'unhide' as const },
+        { type: 'separator' as const },
+        { role: 'quit' as const },
+      ],
+    }] : []),
+    // File menu
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'New Tab',
+          accelerator: 'CmdOrCtrl+T',
+          click: () => sendMenuCommand('new-tab'),
+        },
         { type: 'separator' },
-        { role: 'hide' },
-        { role: 'hideOthers' },
-        { role: 'unhide' },
+        {
+          label: 'Save',
+          accelerator: 'CmdOrCtrl+S',
+          click: () => sendMenuCommand('save'),
+        },
+        {
+          label: 'Save As...',
+          accelerator: 'CmdOrCtrl+Shift+S',
+          click: () => sendMenuCommand('save-as'),
+        },
         { type: 'separator' },
-        { role: 'quit' },
+        {
+          label: 'Close Tab',
+          accelerator: 'CmdOrCtrl+W',
+          click: () => sendMenuCommand('close-tab'),
+        },
+        ...(isMac ? [] : [
+          { type: 'separator' as const },
+          { role: 'quit' as const },
+        ]),
       ],
     },
+    // Edit menu
     {
       label: 'Edit',
       submenu: [
@@ -70,11 +115,43 @@ app.whenReady().then(() => {
         { role: 'copy' },
         { role: 'paste' },
         { role: 'selectAll' },
+        { type: 'separator' },
+        {
+          label: 'Format SQL',
+          accelerator: 'CmdOrCtrl+Shift+F',
+          click: () => sendMenuCommand('format-sql'),
+        },
       ],
     },
+    // Query menu
+    {
+      label: 'Query',
+      submenu: [
+        {
+          label: 'Execute',
+          accelerator: 'CmdOrCtrl+Enter',
+          click: () => sendMenuCommand('execute'),
+        },
+        {
+          label: 'Execute All',
+          accelerator: 'CmdOrCtrl+Shift+Enter',
+          click: () => sendMenuCommand('execute-all'),
+        },
+      ],
+    },
+    // View menu
     {
       label: 'View',
       submenu: [
+        {
+          label: 'Toggle Schema Browser',
+          click: () => sendMenuCommand('toggle-schema-browser'),
+        },
+        {
+          label: 'Toggle File Browser',
+          click: () => sendMenuCommand('toggle-file-browser'),
+        },
+        { type: 'separator' },
         { role: 'reload' },
         { role: 'forceReload' },
         { role: 'toggleDevTools' },
@@ -86,6 +163,7 @@ app.whenReady().then(() => {
         { role: 'togglefullscreen' },
       ],
     },
+    // Window menu
     {
       label: 'Window',
       submenu: [

@@ -123,6 +123,8 @@ React hooks only—no external state library. App component manages tabs, connec
 - `purple-sql-eater-theme` - Light/dark mode
 - `purple-sql-eater-recent-tables` - Recently queried tables
 - `purple-sql-eater-layout` - Browser positioning
+- `purple-sql-eater-execution-mode` - Execute current vs all queries
+- `purple-sql-eater-export-format` - CSV vs Excel export preference
 - `schema-cache-{connectionId}` - Cached schema per connection
 
 ## Security Architecture
@@ -155,6 +157,7 @@ npm start       # Run production build
 ### Keyboard Shortcuts
 - `Cmd/Ctrl+Enter` - Execute current query
 - `Cmd/Ctrl+Shift+Enter` - Execute all queries
+- `Cmd/Ctrl+Shift+F` - Format SQL
 - `Cmd/Ctrl+T` - New tab
 - `Cmd/Ctrl+S` - Save file
 - `Cmd/Ctrl+W` - Close tab

@@ -12,6 +12,7 @@ A fast, simple SQL client designed for business intelligence analysts and data p
 - [Writing Queries](#writing-queries)
 - [Working with Results](#working-with-results)
 - [Tabs and Navigation](#tabs-and-navigation)
+- [Application Menu](#application-menu)
 - [Keyboard Shortcuts](#keyboard-shortcuts)
 - [Tips and Tricks](#tips-and-tricks)
 
@@ -246,18 +247,35 @@ Configure where the Schema and File browsers appear using the layout menu (grid 
 - Changes are held in memory (not auto-saved)
 - Results are preserved per tab
 
+### Formatting SQL
+
+**Format Query:**
+- Press **Cmd+Shift+F** (Mac) / **Ctrl+Shift+F** (Windows/Linux)
+- **OR** use the Query menu → Format SQL
+- Formats using BigQuery dialect with uppercase keywords
+
 ### Executing Queries
 
-**Run Query:**
+**Single Query:**
 - Click the "Execute" button in the toolbar
 - **OR** press **Cmd+Enter** (Mac) / **Ctrl+Enter** (Windows/Linux)
 
+**Multiple Queries:**
+When your editor contains multiple SQL statements (separated by semicolons):
+- A dropdown appears next to the Execute button
+- **Execute Current**: Runs the query where your cursor is positioned
+- **Execute All**: Runs all queries in sequence
+- Press **Cmd+Shift+Enter** to always execute all queries
+- Your preference is remembered between sessions
+
 **While Running:**
 - Button shows "Executing..."
-- You cannot run multiple queries simultaneously
+- A spinner and elapsed time counter appear in the results area
+- Status shows which query is executing (e.g., "Executing 2 of 3...")
 
 **After Execution:**
 - Results appear in the lower panel
+- If multiple queries ran, tabs appear to switch between results
 - Row count flashes briefly in the toolbar
 - Any errors appear in red in the results panel
 
@@ -276,21 +294,53 @@ Configure where the Schema and File browsers appear using the layout menu (grid 
 **Navigation:**
 - Scroll vertically and horizontally
 - Column headers are sticky (stay visible when scrolling)
+- Click any cell to select it
+- Use arrow keys to navigate between cells
+- Cmd/Ctrl+C copies the selected cell value
+
+### Sorting and Filtering
+
+**Sorting:**
+- Click any column header to sort by that column
+- Click again to reverse sort order
+- Click a third time to clear sorting
+
+**Filtering:**
+- Hover over a column header to reveal the filter button (⫶)
+- Click to open the filter menu
+- Filter types: contains, equals, starts with, greater than, less than, range, is null, is not null
+- Active filters appear as pills above the table
+- Click a filter pill to edit, or click × to remove it
+- "Clear all" removes all active filters
+
+**NULL Highlighting:**
+- Click the "NULL" button in the footer to toggle NULL value highlighting
+- When active, NULL values display with a yellow background
 
 ### Exporting Results
 
+**Export Button:**
+- Click "Export CSV" or "Export Excel" in the results footer
+- Use the dropdown (▾) to switch between formats
+- Your last-used format is remembered between sessions
+
 **Export to CSV:**
-1. Click "Export CSV" button above results
-2. File downloads automatically as `query-results-{timestamp}.csv`
-3. Handles special characters, quotes, and newlines properly
+- File downloads as `query-results-{timestamp}.csv`
+- Handles special characters, quotes, and newlines properly
+
+**Export to Excel:**
+- File downloads as `query-results-{timestamp}.xlsx`
+- Multiple query results create separate sheets
+- Includes a "Query" sheet with the executed SQL
 
 **Copy to Clipboard:**
-1. Click "Copy" button above results
+1. Click "Copy" button in results footer
 2. Results copy as tab-separated values (TSV)
 3. Paste into Excel, Google Sheets, or any spreadsheet app
 
 **Format:**
 - CSV: Comma-separated, properly quoted
+- Excel: Native .xlsx with multiple sheets
 - Clipboard: Tab-separated (universal spreadsheet format)
 
 ---
@@ -328,12 +378,45 @@ Configure where the Schema and File browsers appear using the layout menu (grid 
 
 ---
 
+## Application Menu
+
+The application menu provides access to all features via the menu bar.
+
+### File Menu
+
+- **New Tab** (Cmd/Ctrl+T): Create a new query tab
+- **Save** (Cmd/Ctrl+S): Save the current file
+- **Save As** (Cmd/Ctrl+Shift+S): Save to a new file
+- **Close Tab** (Cmd/Ctrl+W): Close the current tab
+
+### Edit Menu
+
+- Standard editing commands (Undo, Redo, Cut, Copy, Paste, Select All)
+
+### Query Menu
+
+- **Execute** (Cmd/Ctrl+Enter): Run the current query
+- **Execute All** (Cmd/Ctrl+Shift+Enter): Run all queries in the editor
+- **Format SQL** (Cmd/Ctrl+Shift+F): Format the SQL in the editor
+
+### View Menu
+
+- **Toggle Schema Browser**: Show/hide the schema browser
+- **Toggle File Browser**: Show/hide the file browser
+
+---
+
 ## Keyboard Shortcuts
 
 | Action | macOS | Windows/Linux |
 |--------|-------|---------------|
-| Execute query | Cmd+Enter | Ctrl+Enter |
+| Execute current query | Cmd+Enter | Ctrl+Enter |
+| Execute all queries | Cmd+Shift+Enter | Ctrl+Shift+Enter |
+| Format SQL | Cmd+Shift+F | Ctrl+Shift+F |
+| Save file | Cmd+S | Ctrl+S |
+| Save file as | Cmd+Shift+S | Ctrl+Shift+S |
 | New tab | Cmd+T | Ctrl+T |
+| Close tab | Cmd+W | Ctrl+W |
 | Find in editor | Cmd+F | Ctrl+F |
 | Replace in editor | Cmd+H | Ctrl+H |
 
@@ -455,11 +538,11 @@ Configure where the Schema and File browsers appear using the layout menu (grid 
 
 ## Getting Help
 
-- Report issues: [GitHub Issues](https://github.com/anthropics/purple-sql-eater/issues)
-- Feature requests: [GitHub Discussions](https://github.com/anthropics/purple-sql-eater/discussions)
+- Report issues: [GitHub Issues](https://github.com/andrewedunn/purple-sql-eater/issues)
+- Feature requests: [GitHub Discussions](https://github.com/andrewedunn/purple-sql-eater/discussions)
 - Documentation: This guide + README.md
 
 ---
 
-**Last Updated:** 2024-12-13
+**Last Updated:** 2025-12-19
 **Version:** 0.1.0 (Early Development)
