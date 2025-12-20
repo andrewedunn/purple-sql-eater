@@ -22,7 +22,7 @@ mac:
         - universal
 
 win:
-  icon: build/icon.png
+  icon: build/icon.ico
   target:
     - nsis
 
@@ -45,8 +45,8 @@ dmg:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
-  installerIcon: build/icon.png
-  uninstallerIcon: build/icon.png
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
 
 publish:
   provider: github
