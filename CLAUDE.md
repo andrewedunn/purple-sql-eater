@@ -96,7 +96,8 @@ window.electron.connectionsSave/Delete/Get/Connect
 
 Events from main to renderer via `ipcRenderer.on`:
 - `schema-progress` - Schema loading progress
-- `file-changed` / `file-deleted` - External file modifications
+- `file-changed` / `file-deleted` / `file-renamed` - External file modifications
+- `folder-changed` - Workspace folder contents changed
 
 ### Database Connector Pattern
 
@@ -152,10 +153,86 @@ npm start       # Run production build
 ```
 
 ### Keyboard Shortcuts
-- `Cmd/Ctrl+Enter` - Execute query
+- `Cmd/Ctrl+Enter` - Execute current query
+- `Cmd/Ctrl+Shift+Enter` - Execute all queries
 - `Cmd/Ctrl+T` - New tab
 - `Cmd/Ctrl+S` - Save file
 - `Cmd/Ctrl+W` - Close tab
+- `Cmd/Ctrl+C` (in results) - Copy selected cell
+- Arrow keys (in results) - Navigate cells
+
+## Releasing
+
+Releases are automated via GitHub Actions. When you push a version tag, builds are created for macOS, Windows, and Linux automatically.
+
+### Release Process
+
+1. **Bump version in package.json:**
+   ```bash
+   # Edit "version": "0.1.0" → "0.2.0"
+   ```
+
+2. **Commit and tag:**
+   ```bash
+   git add package.json
+   git commit -m "Bump version to 0.2.0"
+   git tag v0.2.0
+   git push origin main --tags
+   ```
+
+3. **Monitor the build:**
+   - Go to https://github.com/andrewedunn/purple-sql-eater/actions
+   - The workflow builds on all three platforms (~5-10 minutes)
+   - Creates a GitHub Release with all binaries attached
+
+### Build Outputs
+- **macOS:** `.dmg` (universal) + `.zip`
+- **Windows:** `.exe` (NSIS installer)
+- **Linux:** `.AppImage`
+
+### Local Builds
+```bash
+npm run dist:mac    # Build for macOS only
+npm run dist:win    # Build for Windows only (requires Windows)
+npm run dist:linux  # Build for Linux only (requires Linux)
+```
+
+## Known Patterns
+
+### Monaco Editor Stale Closures
+
+Monaco's `addAction` captures the callback closure at registration time. If your action needs current React state, use refs:
+
+```typescript
+const executeRef = useRef<() => void>(() => {});
+
+// Keep ref updated
+useEffect(() => {
+  executeRef.current = () => handleExecute();
+});
+
+// Register action once, ref always has current function
+editor.addAction({
+  id: 'execute',
+  keybindings: [KeyMod.CtrlCmd | KeyCode.Enter],
+  run: () => executeRef.current()
+});
+```
+
+### File Watcher Suppression
+
+When the app writes a file, suppress the file watcher to prevent "changed externally" notifications:
+
+```typescript
+fileWatcherService.suppressPath(filePath);
+try {
+  await writeFile(filePath, content);
+} finally {
+  setTimeout(() => fileWatcherService.unsuppressPath(filePath), 1500);
+}
+```
+
+The 1500ms delay accounts for chokidar's stabilityThreshold (300ms) plus write time.
 
 ## Known Gaps
 
