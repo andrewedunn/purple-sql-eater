@@ -30,8 +30,11 @@ A fast, simple SQL client built with Electron for business intelligence analysts
   - Pagination
 - ✅ Multi-tab interface with save/load
   - Auto-track unsaved changes
-  - Keyboard shortcuts (Cmd+Enter, Cmd+T, Cmd+S)
-- ✅ Export to CSV / Copy to clipboard
+  - Keyboard shortcuts (Cmd+Enter, Cmd+T, Cmd+S, Cmd+W)
+- ✅ Export to CSV or Excel / Copy to clipboard
+- ✅ SQL formatting (Cmd+Shift+F)
+- ✅ Execute current query or all queries (Cmd+Enter / Cmd+Shift+Enter)
+- ✅ Application menu (File, Edit, Query, View)
 - ✅ Light/dark theme toggle
 
 **Documentation:**
@@ -107,7 +110,6 @@ This allows the app to support multiple databases without changing core logic.
 See [ROADMAP.md](ROADMAP.md) for detailed feature planning.
 
 **Next Priorities:**
-- [ ] Context-aware autocomplete (schema-aware suggestions)
 - [ ] Query history tracking
 - [ ] Additional database connectors (PostgreSQL, MySQL, Redshift)
 - [ ] AI features (natural language to SQL, auto-documentation)
