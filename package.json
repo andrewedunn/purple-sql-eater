@@ -1,7 +1,7 @@
 {
   "name": "purple-sql-eater",
   "productName": "Purple SQL Eater",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A simple, fast SQL client for business analysts",
   "main": "dist/main/main/main.js",
   "author": {
