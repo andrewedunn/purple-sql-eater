@@ -24,7 +24,13 @@
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:win": "npm run build && electron-builder --win",
-    "dist:linux": "npm run build && electron-builder --linux"
+    "dist:linux": "npm run build && electron-builder --linux",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:renderer": "vitest run --config vitest.config.renderer.ts",
+    "test:renderer:watch": "vitest --config vitest.config.renderer.ts",
+    "test:all": "npm run test && npm run test:renderer",
+    "test:coverage": "vitest run --coverage && vitest run --config vitest.config.renderer.ts --coverage"
   },
   "keywords": [
     "sql",
@@ -34,15 +40,20 @@
   ],
   "license": "MIT",
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.1",
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.42",
     "@types/react-dom": "^18.2.17",
     "@vitejs/plugin-react": "^4.2.1",
+    "@vitest/coverage-v8": "^4.0.16",
     "concurrently": "^8.2.2",
     "electron": "^28.0.0",
     "electron-builder": "^26.0.12",
+    "jsdom": "^27.3.0",
     "typescript": "^5.3.3",
-    "vite": "^5.0.7"
+    "vite": "^5.0.7",
+    "vitest": "^4.0.16"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^7.3.0",

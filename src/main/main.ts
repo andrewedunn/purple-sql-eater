@@ -9,6 +9,7 @@ import { FileSystemService } from './services/FileSystemService';
 import { WorkspaceService } from './services/WorkspaceService';
 import { FileWatcherService } from './services/FileWatcherService';
 import { SecureConnectionStorage } from './services/SecureConnectionStorage';
+import { validateFilePath } from './utils/pathValidation';
 
 let mainWindow: BrowserWindow | null = null;
 let connector: DatabaseConnector | null = null;
@@ -196,21 +197,6 @@ app.on('activate', () => {
 app.on('before-quit', () => {
   fileWatcherService.unwatchAll();
 });
-
-// Helper to validate file paths from renderer
-function validateFilePath(filePath: unknown): asserts filePath is string {
-  if (!filePath || typeof filePath !== 'string') {
-    throw new Error('Invalid file path: path must be a non-empty string');
-  }
-
-  if (filePath.includes('\0')) {
-    throw new Error('Invalid file path: null bytes not allowed');
-  }
-
-  if (filePath.length > 4096) {
-    throw new Error('Invalid file path: path too long (max 4096 characters)');
-  }
-}
 
 // Sanitize sensitive data from logs
 function sanitizeArgs(channel: string, args: any[]): any[] {
