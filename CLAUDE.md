@@ -6,7 +6,7 @@ Open-source project. All code published to GitHub.
 
 ## Project Status
 
-**Core functionality complete.** BigQuery connection, schema browser, file management, and multi-tab editor are working and production-ready. Security hardening (credential encryption, path traversal protection) is complete. Missing: automated tests.
+**Core functionality complete.** BigQuery connection, schema browser, file management, and multi-tab editor are working and production-ready. Security hardening (credential encryption, path traversal protection) is complete. Automated testing infrastructure is in place with CI.
 
 See [ROADMAP.md](./ROADMAP.md) for completed features and what's next.
 
@@ -55,21 +55,31 @@ src/
 │   ├── preload.ts           # Security bridge exposing IPC to renderer
 │   ├── connectors/          # Database connector implementations
 │   │   └── bigquery.ts      # BigQuery connector
-│   └── services/            # Backend services
-│       ├── SecureConnectionStorage.ts  # Encrypted credential storage
-│       ├── FileSystemService.ts        # File I/O with path validation
-│       ├── WorkspaceService.ts         # Workspace management
-│       └── FileWatcherService.ts       # External file change detection
+│   ├── services/            # Backend services
+│   │   ├── SecureConnectionStorage.ts  # Encrypted credential storage
+│   │   ├── FileSystemService.ts        # File I/O with path validation
+│   │   ├── FileSystemService.test.ts   # Tests for file operations
+│   │   ├── WorkspaceService.ts         # Workspace management
+│   │   └── FileWatcherService.ts       # External file change detection
+│   └── utils/               # Utility functions
+│       ├── pathValidation.ts           # IPC path validation
+│       └── pathValidation.test.ts      # Tests for path validation
 ├── renderer/                # React UI (browser process)
 │   ├── main.tsx             # React entry point
 │   ├── App-new.tsx          # Main application component
 │   ├── design-system.css    # CSS variables and theming
-│   └── components/          # UI components
-│       ├── SchemaBrowser.tsx     # Database schema explorer
-│       ├── FileBrowser.tsx       # Workspace file tree
-│       ├── ResultsTable.tsx      # Virtualized query results
-│       ├── TabBar.tsx            # Multi-tab interface
-│       └── ConnectionPicker.tsx  # Saved connections
+│   ├── test-setup.ts        # Test mocks for window.electron, localStorage
+│   ├── components/          # UI components
+│   │   ├── SchemaBrowser.tsx     # Database schema explorer
+│   │   ├── FileBrowser.tsx       # Workspace file tree
+│   │   ├── ResultsTable.tsx      # Virtualized query results
+│   │   ├── TabBar.tsx            # Multi-tab interface
+│   │   └── ConnectionPicker.tsx  # Saved connections
+│   └── utils/               # Renderer utilities
+│       ├── sqlSplitter.ts        # Split SQL into queries
+│       ├── sqlSplitter.test.ts   # Tests for SQL splitting
+│       ├── sqlParser.ts          # Extract table names from SQL
+│       └── sqlParser.test.ts     # Tests for SQL parsing
 └── shared/
     └── types.ts             # Shared TypeScript interfaces
 ```
@@ -237,6 +247,92 @@ try {
 
 The 1500ms delay accounts for chokidar's stabilityThreshold (300ms) plus write time.
 
-## Known Gaps
+## Testing
 
-**No automated tests.** This is the biggest gap for production readiness. Should add tests before new features.
+### Running Tests
+
+```bash
+npm test              # Run main process tests (Node.js)
+npm run test:renderer # Run renderer tests (React/browser)
+npm run test:all      # Run both
+npm run test:watch    # Watch mode for development
+npm run test:coverage # Generate coverage reports
+```
+
+### Test Organization
+
+Tests live alongside the code they test with `.test.ts` suffix:
+- `src/main/**/*.test.ts` - Main process tests (run with Node environment)
+- `src/renderer/**/*.test.ts` - Renderer tests (run with jsdom environment)
+
+### Test Configuration
+
+- `vitest.config.ts` - Main process test config (Node environment)
+- `vitest.config.renderer.ts` - Renderer test config (jsdom + React Testing Library)
+- `src/renderer/test-setup.ts` - Mocks for `window.electron` and `localStorage`
+
+### Writing New Tests
+
+**For main process code (services, utils):**
+```typescript
+// src/main/services/MyService.test.ts
+import { describe, it, expect } from 'vitest';
+import { MyService } from './MyService';
+
+describe('MyService', () => {
+  it('should do something', () => {
+    const service = new MyService();
+    expect(service.doThing()).toBe('expected');
+  });
+});
+```
+
+**For renderer code (components, utilities):**
+```typescript
+// src/renderer/utils/myUtil.test.ts
+import { describe, it, expect } from 'vitest';
+import { myFunction } from './myUtil';
+
+describe('myFunction', () => {
+  it('should handle input', () => {
+    expect(myFunction('input')).toBe('output');
+  });
+});
+```
+
+**For React components:**
+```typescript
+// src/renderer/components/MyComponent.test.tsx
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { MyComponent } from './MyComponent';
+
+describe('MyComponent', () => {
+  it('should render', () => {
+    render(<MyComponent />);
+    expect(screen.getByText('Hello')).toBeInTheDocument();
+  });
+});
+```
+
+### CI/CD
+
+Tests run automatically on every push and PR via GitHub Actions (`.github/workflows/test.yml`). Tests run on macOS, Windows, and Linux.
+
+### Current Test Coverage
+
+| Area | Coverage |
+|------|----------|
+| Path traversal security | ✅ FileSystemService.test.ts |
+| IPC input validation | ✅ pathValidation.test.ts |
+| SQL query splitting | ✅ sqlSplitter.test.ts |
+| SQL table extraction | ✅ sqlParser.test.ts |
+| React components | ⏳ Not yet covered |
+| SecureConnectionStorage | ⏳ Not yet covered |
+
+### Test Philosophy
+
+- **Security first**: Path validation and traversal protection must have comprehensive tests
+- **Pure functions are easy**: Utility functions like SQL parsing are ideal test candidates
+- **Follow TDD for new features**: Write failing test, implement, verify
+- **Don't test mocks**: Tests should verify real behavior, not mocked implementations

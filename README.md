@@ -70,6 +70,17 @@ src/
 
    This starts both the Vite dev server (renderer) and Electron (main process).
 
+## Testing
+
+```bash
+npm test              # Run main process tests
+npm run test:renderer # Run renderer tests
+npm run test:all      # Run all tests
+npm run test:watch    # Watch mode
+```
+
+Tests run automatically on push/PR via GitHub Actions across macOS, Windows, and Linux.
+
 ## Build
 
 Build for production:
@@ -83,6 +94,7 @@ npm run build
 - **React** - UI framework
 - **TypeScript** - Type safety
 - **Vite** - Build tool
+- **Vitest** - Test framework
 - **Monaco Editor** - Code editor (VS Code's editor)
 - **BigQuery SDK** - Google Cloud BigQuery connector
 
